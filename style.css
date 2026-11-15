@@ -546,33 +546,6 @@ h2 {
     border: 1px solid #166534;
 }
 
-.integration-field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-bottom: 16px;
-}
-
-.integration-field label {
-    color: #888888;
-    font-size: 0.85rem;
-}
-
-.integration-field input {
-    background-color: #000000;
-    border: 1px solid #242424;
-    border-radius: 6px;
-    padding: 10px 14px;
-    font-family: 'Poppins', sans-serif;
-    font-size: 0.9rem;
-    color: #ffffff;
-    outline: none;
-}
-
-.integration-field input:focus {
-    border-color: #555555;
-}
-
 .integration-actions {
     display: flex;
     gap: 10px;

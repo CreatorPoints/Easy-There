@@ -7,6 +7,10 @@ const firebaseConfig = {
     appId: "1:904948755932:web:790f2cda2e17f357a4b319"
 };
 
+const GCAL_CONNECTED_KEY = "easy_there_gcal_connected";
+const GCAL_STORAGE_KEY = "easy_there_gcal_events";
+const GCAL_TOKEN_KEY = "easy_there_gcal_token";
+
 let auth = null;
 let db = null;
 let currentUser = null;
@@ -136,6 +140,98 @@ async function fetchEventsFromCloud() {
     return null;
 }
 
+function parseGoogleEvents(items) {
+    const events = {};
+    if (!Array.isArray(items)) return events;
+
+    items.forEach(function(item) {
+        const start = item.start?.dateTime || item.start?.date;
+        if (!start) return;
+
+        const dateKey = start.substring(0, 10);
+        if (!events[dateKey]) {
+            events[dateKey] = [];
+        }
+
+        let timeStr = "All Day";
+        if (item.start?.dateTime && item.end?.dateTime) {
+            const startDate = new Date(item.start.dateTime);
+            const endDate = new Date(item.end.dateTime);
+            timeStr = `${startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        }
+
+        events[dateKey].push({
+            title: item.summary || "Busy",
+            time: timeStr,
+            busy: item.transparency !== "transparent",
+            source: "google"
+        });
+    });
+
+    return events;
+}
+
+async function fetchGoogleCalendarEvents(accessToken) {
+    const now = new Date();
+    const timeMin = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+    const timeMax = new Date(now.getFullYear(), now.getMonth() + 2, 0).toISOString();
+    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime`;
+
+    const response = await fetch(url, {
+        headers: {
+            Authorization: `Bearer ${accessToken}`
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Google Calendar request failed (${response.status})`);
+    }
+
+    const data = await response.json();
+    return parseGoogleEvents(data.items);
+}
+
+async function connectGoogleCalendar() {
+    if (!auth) throw new Error("Auth not initialized");
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.addScope("https://www.googleapis.com/auth/calendar.readonly");
+
+    const result = await auth.signInWithPopup(provider);
+    const credential = result.credential || firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+    const accessToken = credential?.accessToken;
+
+    if (!accessToken) {
+        throw new Error("Unable to obtain Google Calendar access token.");
+    }
+
+    localStorage.setItem(GCAL_TOKEN_KEY, accessToken);
+    const events = await fetchGoogleCalendarEvents(accessToken);
+    localStorage.setItem(GCAL_STORAGE_KEY, JSON.stringify(events));
+    localStorage.setItem(GCAL_CONNECTED_KEY, "true");
+    return events;
+}
+
+async function refreshGoogleCalendar() {
+    const token = localStorage.getItem(GCAL_TOKEN_KEY);
+    if (!token) {
+        return connectGoogleCalendar();
+    }
+    try {
+        const events = await fetchGoogleCalendarEvents(token);
+        localStorage.setItem(GCAL_STORAGE_KEY, JSON.stringify(events));
+        localStorage.setItem(GCAL_CONNECTED_KEY, "true");
+        return events;
+    } catch (e) {
+        return connectGoogleCalendar();
+    }
+}
+
+function disconnectGoogleCalendar() {
+    localStorage.setItem(GCAL_CONNECTED_KEY, "false");
+    localStorage.removeItem(GCAL_STORAGE_KEY);
+    localStorage.removeItem(GCAL_TOKEN_KEY);
+}
+
 window.EasyThereFirebase = {
     init: initFirebase,
     loginWithGoogle: loginWithGoogle,
@@ -145,6 +241,9 @@ window.EasyThereFirebase = {
     fetchTodosFromCloud: fetchTodosFromCloud,
     syncEventsToCloud: syncEventsToCloud,
     fetchEventsFromCloud: fetchEventsFromCloud,
+    connectGoogleCalendar: connectGoogleCalendar,
+    refreshGoogleCalendar: refreshGoogleCalendar,
+    disconnectGoogleCalendar: disconnectGoogleCalendar,
     getCurrentUser: function() { return currentUser; }
 };
 
