@@ -18,4 +18,4 @@
 - **No Superficial Hacks**: Avoid haphazard patches, bloated wrapper layers, or speculative workarounds. Focus on root causes with clean, robust solutions.
 
 ## 5. Git & Push Policy
-- **Push Cadence**: Push to the remote repository only when a substantial feature is completed and added. For minor tweaks, styling adjustments, or small fixes, do not push unless explicitly requested.
+- **Push Cadence**: Always commit and push changes to the remote repository upon completing tasks.

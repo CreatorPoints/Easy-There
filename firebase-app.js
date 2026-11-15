@@ -30,6 +30,8 @@ function initFirebase() {
         userListeners.forEach(function(fn) {
             fn(user);
         });
+    }, function() {
+        renderGlobalAuthUI(null);
     });
 }
 
@@ -72,7 +74,12 @@ function renderGlobalAuthUI(user) {
 function loginWithGoogle() {
     if (!auth) return Promise.reject(new Error("Auth not initialized"));
     const provider = new firebase.auth.GoogleAuthProvider();
-    return auth.signInWithPopup(provider);
+    return auth.signInWithPopup(provider).catch(function(err) {
+        if (err.message && err.message.includes("CONFIGURATION_NOT_FOUND")) {
+            throw new Error("Authentication is not enabled in Firebase Console yet. Please enable Google Sign-In under Authentication > Sign-in method in the Firebase Console.");
+        }
+        throw err;
+    });
 }
 
 function logout() {
