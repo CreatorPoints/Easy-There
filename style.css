@@ -1,3 +1,10 @@
 body {
     background-color: black;
+    font-family: 'Poppins', sans-serif;
+}
+h1, h2, li {
+    color: white;
+}
+p {
+    color: whitesmoke;
 }
