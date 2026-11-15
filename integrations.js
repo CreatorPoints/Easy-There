@@ -60,7 +60,10 @@ if (connectBtn) {
             await window.EasyThereFirebase.refreshGoogleCalendar();
             updateUI();
         } catch (err) {
-            feedbackMsg.textContent = err.message;
+            feedbackMsg.innerHTML = err.message.replace(
+                /(https?:\/\/[^\s]+)/g,
+                '<a href="$1" target="_blank" rel="noopener" style="color: #60a5fa; text-decoration: underline;">Enable Google Calendar API</a>'
+            );
             feedbackMsg.style.color = "#f87171";
         }
     });

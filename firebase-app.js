@@ -184,6 +184,9 @@ async function fetchGoogleCalendarEvents(accessToken) {
     });
 
     if (!response.ok) {
+        if (response.status === 403) {
+            throw new Error(`Google Calendar API is disabled in project ${firebaseConfig.projectId}. Enable it here: https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project=${firebaseConfig.projectId}`);
+        }
         throw new Error(`Google Calendar request failed (${response.status})`);
     }
 
