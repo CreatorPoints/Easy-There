@@ -8,8 +8,6 @@ const eventInput = document.getElementById("calendar-event-input");
 const eventsListEl = document.getElementById("calendar-events-list");
 
 const STORAGE_KEY = "easy_there_calendar_events";
-const GCAL_STORAGE_KEY = "easy_there_gcal_events";
-const GCAL_CONNECTED_KEY = "easy_there_gcal_connected";
 
 const monthNames = [
     "January", "February", "March", "April", "May", "June",
@@ -36,11 +34,14 @@ function loadEvents() {
 }
 
 function loadGcalEvents() {
-    if (localStorage.getItem(GCAL_CONNECTED_KEY) !== "true") {
+    if (window.EasyThereFirebase && window.EasyThereFirebase.getGoogleCalendarEvents) {
+        return window.EasyThereFirebase.getGoogleCalendarEvents();
+    }
+    if (localStorage.getItem("easy_there_gcal_connected") !== "true") {
         return {};
     }
     try {
-        const raw = localStorage.getItem(GCAL_STORAGE_KEY);
+        const raw = localStorage.getItem("easy_there_gcal_events");
         return raw ? JSON.parse(raw) : {};
     } catch (e) {
         return {};

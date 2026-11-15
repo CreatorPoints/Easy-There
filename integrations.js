@@ -8,10 +8,8 @@ const fbLogoutBtn = document.getElementById("firebase-logout-btn");
 const fbStatusBadge = document.getElementById("firebase-status-badge");
 const fbFeedback = document.getElementById("firebase-feedback");
 
-const GCAL_CONNECTED_KEY = "easy_there_gcal_connected";
-
 function updateUI() {
-    const isConnected = localStorage.getItem(GCAL_CONNECTED_KEY) === "true";
+    const isConnected = window.EasyThereFirebase ? window.EasyThereFirebase.isGoogleCalendarConnected() : (localStorage.getItem("easy_there_gcal_connected") === "true");
 
     if (isConnected) {
         statusBadge.textContent = "Connected";

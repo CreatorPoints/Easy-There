@@ -244,6 +244,20 @@ window.EasyThereFirebase = {
     connectGoogleCalendar: connectGoogleCalendar,
     refreshGoogleCalendar: refreshGoogleCalendar,
     disconnectGoogleCalendar: disconnectGoogleCalendar,
+    isGoogleCalendarConnected: function() {
+        return localStorage.getItem(GCAL_CONNECTED_KEY) === "true";
+    },
+    getGoogleCalendarEvents: function() {
+        if (localStorage.getItem(GCAL_CONNECTED_KEY) !== "true") {
+            return {};
+        }
+        try {
+            const raw = localStorage.getItem(GCAL_STORAGE_KEY);
+            return raw ? JSON.parse(raw) : {};
+        } catch (e) {
+            return {};
+        }
+    },
     getCurrentUser: function() { return currentUser; }
 };
 
