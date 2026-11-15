@@ -5,13 +5,16 @@ form.addEventListener("submit", function(event) {
     event.preventDefault();
     const todo = input.value.trim();
     if(!todo) return;
-    const item = document.createElement("li");
+    const item = document.createElement("p", "input");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
     item.textContent = todo;
-    item.addEventListener("click", function() {
+    checkbox.addEventListener("click", function() {
         item.style.textDecoration = "line-through"
         ? "none"
         : "line-through";
     })
+    list.appendChild(checkbox)
     list.appendChild(item);
     input.value = "";
 })
