@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Easy There - Calendar</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <span class="app-brand">Easy There</span>
+                <button id="sidebar-close" class="icon-button" aria-label="Close sidebar">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="index.html" class="nav-item">To-Do</a>
+                <a href="calendar.html" class="nav-item active">Calendar</a>
+            </nav>
+        </aside>
+        <div class="main-wrapper">
+            <header class="topbar">
+                <button id="sidebar-toggle" class="icon-button" aria-label="Toggle sidebar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
+            </header>
+            <main class="container">
+                <h1>Calendar</h1>
+                <p class="subtitle">Manage dates and schedule events</p>
+                <hr>
+                <div class="calendar-wrapper">
+                    <div class="calendar-header">
+                        <h2 id="calendar-month-year"></h2>
+                        <div class="calendar-controls">
+                            <button id="calendar-prev" class="icon-button" aria-label="Previous month">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                            </button>
+                            <button id="calendar-next" class="icon-button" aria-label="Next month">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="calendar-weekdays">
+                        <span>Su</span>
+                        <span>Mo</span>
+                        <span>Tu</span>
+                        <span>We</span>
+                        <span>Th</span>
+                        <span>Fr</span>
+                        <span>Sa</span>
+                    </div>
+                    <div id="calendar-days" class="calendar-days"></div>
+                    <div class="calendar-events-section">
+                        <h3 id="selected-date-heading"></h3>
+                        <form id="calendar-event-form">
+                            <input id="calendar-event-input" type="text" placeholder="Add an event..." required>
+                            <button type="submit">Add Event</button>
+                        </form>
+                        <div id="calendar-events-list"></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    <script src="sidebar.js"></script>
+    <script src="calendar.js"></script>
+</body>
+</html>
