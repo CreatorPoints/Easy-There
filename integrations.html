@@ -8,6 +8,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="firebase-app.js"></script>
 </head>
 <body>
     <div class="app-layout">
@@ -36,24 +40,45 @@
                         <line x1="3" y1="18" x2="21" y2="18"></line>
                     </svg>
                 </button>
+                <div class="auth-topbar-slot"></div>
             </header>
             <main class="container">
                 <h1>Integrations</h1>
                 <p class="subtitle">Connect external services and synchronize your schedule</p>
                 <hr>
                 <div class="integration-cards">
+                    <div class="integration-card" id="firebase-card">
+                        <div class="integration-header">
+                            <div class="integration-info">
+                                <h2>Firebase Cloud Sync & Auth</h2>
+                                <p class="integration-desc">Project: easy-there-7901. Google Sign-In and cloud synchronization for your tasks and schedule.</p>
+                            </div>
+                            <span id="firebase-status-badge" class="status-badge disconnected">Signed Out</span>
+                        </div>
+                        <div class="integration-body">
+                            <div class="integration-actions">
+                                <button type="button" id="firebase-login-btn" class="primary-btn">Sign In with Google</button>
+                                <button type="button" id="firebase-logout-btn" class="secondary-btn hidden">Sign Out</button>
+                            </div>
+                            <p id="firebase-feedback" class="feedback-msg"></p>
+                        </div>
+                    </div>
                     <div class="integration-card" id="gcal-card">
                         <div class="integration-header">
                             <div class="integration-info">
                                 <h2>Google Calendar</h2>
-                                <p class="integration-desc">Sync events, sponsor meetings, and busy blocks directly into your schedule.</p>
+                                <p class="integration-desc">Sync events, meetings, and busy blocks directly into your schedule.</p>
                             </div>
                             <span id="gcal-status-badge" class="status-badge disconnected">Disconnected</span>
                         </div>
                         <div class="integration-body">
                             <div class="integration-field">
-                                <label for="gcal-client-id">Google Client ID (Optional for Live OAuth)</label>
-                                <input type="text" id="gcal-client-id" placeholder="your-client-id.apps.googleusercontent.com">
+                                <label for="gcal-calendar-id">Calendar ID</label>
+                                <input type="text" id="gcal-calendar-id">
+                            </div>
+                            <div class="integration-field">
+                                <label for="gcal-api-key">API Key</label>
+                                <input type="text" id="gcal-api-key">
                             </div>
                             <div class="integration-actions">
                                 <button type="button" id="gcal-connect-btn" class="primary-btn">Connect Google Calendar</button>

@@ -51,6 +51,9 @@ function saveEvents(data) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch (e) {}
+    if (window.EasyThereFirebase) {
+        window.EasyThereFirebase.syncEventsToCloud(events);
+    }
 }
 
 function getDateKey(year, month, day) {
@@ -222,6 +225,24 @@ if (eventForm) {
         eventInput.value = "";
         renderCalendar();
         renderEvents();
+    });
+}
+
+if (window.EasyThereFirebase) {
+    window.EasyThereFirebase.onUserChanged(async function(user) {
+        if (user) {
+            const cloudEvents = await window.EasyThereFirebase.fetchEventsFromCloud();
+            if (cloudEvents && typeof cloudEvents === "object") {
+                events = cloudEvents;
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+                } catch (e) {}
+                renderCalendar();
+                renderEvents();
+            } else {
+                window.EasyThereFirebase.syncEventsToCloud(events);
+            }
+        }
     });
 }
 

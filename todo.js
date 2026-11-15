@@ -18,6 +18,9 @@ function saveTodos() {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
     } catch (e) {}
+    if (window.EasyThereFirebase) {
+        window.EasyThereFirebase.syncTodosToCloud(todos);
+    }
 }
 
 function createTodoElement(todo) {
@@ -86,5 +89,22 @@ form.addEventListener("submit", function(event) {
     list.appendChild(createTodoElement(newTodo));
     input.value = "";
 });
+
+if (window.EasyThereFirebase) {
+    window.EasyThereFirebase.onUserChanged(async function(user) {
+        if (user) {
+            const cloudTodos = await window.EasyThereFirebase.fetchTodosFromCloud();
+            if (cloudTodos && Array.isArray(cloudTodos)) {
+                todos = cloudTodos;
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
+                } catch (e) {}
+                renderTodos();
+            } else {
+                window.EasyThereFirebase.syncTodosToCloud(todos);
+            }
+        }
+    });
+}
 
 renderTodos();

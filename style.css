@@ -104,8 +104,54 @@ body {
 .topbar {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     padding: 12px 20px;
     border-bottom: 1px solid #1a1a1a;
+}
+
+.auth-topbar-slot {
+    display: flex;
+    align-items: center;
+}
+
+.auth-user-badge {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.auth-user-name {
+    color: #f0f0f0;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.auth-action-btn {
+    background-color: transparent;
+    color: #888888;
+    border: 1px solid #242424;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.auth-action-btn:hover {
+    color: #ffffff;
+    border-color: #555555;
+}
+
+.auth-action-btn.primary {
+    background-color: #ffffff;
+    color: #000000;
+    border: none;
+    font-weight: 500;
+}
+
+.auth-action-btn.primary:hover {
+    background-color: #e5e5e5;
 }
 
 .container {

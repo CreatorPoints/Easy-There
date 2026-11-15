@@ -8,6 +8,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="firebase-app.js"></script>
 </head>
 <body>
     <div class="app-layout">
@@ -36,6 +40,7 @@
                         <line x1="3" y1="18" x2="21" y2="18"></line>
                     </svg>
                 </button>
+                <div class="auth-topbar-slot"></div>
             </header>
             <main class="container">
                 <h1>Easy There</h1>
@@ -43,7 +48,7 @@
                 <hr>
                 <h2>To-Do</h2>
                 <form id="todo-form">
-                    <input id="todo-input" type="text" placeholder="Enter a task" required>
+                    <input id="todo-input" type="text" required>
                     <button type="submit">Add To-Do</button>
                 </form>
                 <div id="todo-list"></div>

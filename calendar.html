@@ -8,6 +8,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="firebase-app.js"></script>
 </head>
 <body>
     <div class="app-layout">
@@ -36,6 +40,7 @@
                         <line x1="3" y1="18" x2="21" y2="18"></line>
                     </svg>
                 </button>
+                <div class="auth-topbar-slot"></div>
             </header>
             <main class="container">
                 <h1>Calendar</h1>
@@ -70,7 +75,7 @@
                     <div class="calendar-events-section">
                         <h3 id="selected-date-heading"></h3>
                         <form id="calendar-event-form">
-                            <input id="calendar-event-input" type="text" placeholder="Add an event..." required>
+                            <input id="calendar-event-input" type="text" required>
                             <button type="submit">Add Event</button>
                         </form>
                         <div id="calendar-events-list"></div>
