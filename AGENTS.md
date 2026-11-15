@@ -16,3 +16,6 @@
 - **No Vibecoding or Speculative Code**: Never produce code based on guesswork, superficial patterns, or vague assumptions.
 - **Intentional & Disciplined Logic**: Every implementation must be deliberate, technically sound, and mathematically/logically verified.
 - **No Superficial Hacks**: Avoid haphazard patches, bloated wrapper layers, or speculative workarounds. Focus on root causes with clean, robust solutions.
+
+## 5. Git & Push Policy
+- **Push Cadence**: Push to the remote repository only when a substantial feature is completed and added. For minor tweaks, styling adjustments, or small fixes, do not push unless explicitly requested.
