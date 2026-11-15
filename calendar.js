@@ -8,6 +8,9 @@ const eventInput = document.getElementById("calendar-event-input");
 const eventsListEl = document.getElementById("calendar-events-list");
 
 const STORAGE_KEY = "easy_there_calendar_events";
+const GCAL_STORAGE_KEY = "easy_there_gcal_events";
+const GCAL_CONNECTED_KEY = "easy_there_gcal_connected";
+
 const monthNames = [
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
@@ -21,10 +24,23 @@ let selectedMonth = displayedMonth;
 let selectedDay = today.getDate();
 
 let events = loadEvents();
+let gcalEvents = loadGcalEvents();
 
 function loadEvents() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function loadGcalEvents() {
+    if (localStorage.getItem(GCAL_CONNECTED_KEY) !== "true") {
+        return {};
+    }
+    try {
+        const raw = localStorage.getItem(GCAL_STORAGE_KEY);
         return raw ? JSON.parse(raw) : {};
     } catch (e) {
         return {};
@@ -44,6 +60,7 @@ function getDateKey(year, month, day) {
 }
 
 function renderCalendar() {
+    gcalEvents = loadGcalEvents();
     monthYearEl.textContent = `${monthNames[displayedMonth]} ${displayedYear}`;
     calendarDaysEl.innerHTML = "";
 
@@ -62,7 +79,10 @@ function renderCalendar() {
         dayCell.textContent = day;
 
         const dateKey = getDateKey(displayedYear, displayedMonth, day);
-        if (events[dateKey] && events[dateKey].length > 0) {
+        const hasManual = events[dateKey] && events[dateKey].length > 0;
+        const hasGcal = gcalEvents[dateKey] && gcalEvents[dateKey].length > 0;
+
+        if (hasManual || hasGcal) {
             dayCell.classList.add("has-events");
         }
 
@@ -108,8 +128,10 @@ function renderEvents() {
     dateHeadingEl.textContent = `Events for ${dateString}`;
 
     eventsListEl.innerHTML = "";
-    const list = events[dateKey] || [];
-    if (list.length === 0) {
+    const manualList = events[dateKey] || [];
+    const gcalList = gcalEvents[dateKey] || [];
+
+    if (manualList.length === 0 && gcalList.length === 0) {
         const emptyMsg = document.createElement("p");
         emptyMsg.className = "empty-events-notice";
         emptyMsg.textContent = "No events scheduled for this date.";
@@ -117,11 +139,49 @@ function renderEvents() {
         return;
     }
 
-    list.forEach(function(evt) {
-        const item = document.createElement("div");
-        item.className = "calendar-event-item";
-        item.textContent = evt;
-        eventsListEl.appendChild(item);
+    gcalList.forEach(function(item) {
+        const row = document.createElement("div");
+        row.className = "calendar-event-item gcal";
+
+        const info = document.createElement("div");
+        info.className = "event-info";
+
+        const title = document.createElement("div");
+        title.className = "event-title";
+        title.textContent = item.title;
+
+        const time = document.createElement("div");
+        time.className = "event-time";
+        time.textContent = item.time;
+
+        info.appendChild(title);
+        info.appendChild(time);
+
+        const badges = document.createElement("div");
+        badges.className = "event-badges";
+
+        const gcalBadge = document.createElement("span");
+        gcalBadge.className = "gcal-badge";
+        gcalBadge.textContent = "Google";
+        badges.appendChild(gcalBadge);
+
+        if (item.busy) {
+            const busyBadge = document.createElement("span");
+            busyBadge.className = "busy-badge";
+            busyBadge.textContent = "Busy";
+            badges.appendChild(busyBadge);
+        }
+
+        row.appendChild(info);
+        row.appendChild(badges);
+        eventsListEl.appendChild(row);
+    });
+
+    manualList.forEach(function(evt) {
+        const row = document.createElement("div");
+        row.className = "calendar-event-item";
+        row.textContent = evt;
+        eventsListEl.appendChild(row);
     });
 }
 

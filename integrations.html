@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Easy There - Integrations</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <span class="app-brand">Easy There</span>
+                <button id="sidebar-close" class="icon-button" aria-label="Close sidebar">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="index.html" class="nav-item">To-Do</a>
+                <a href="calendar.html" class="nav-item">Calendar</a>
+                <a href="integrations.html" class="nav-item active">Integrations</a>
+            </nav>
+        </aside>
+        <div class="main-wrapper">
+            <header class="topbar">
+                <button id="sidebar-toggle" class="icon-button" aria-label="Toggle sidebar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
+            </header>
+            <main class="container">
+                <h1>Integrations</h1>
+                <p class="subtitle">Connect external services and synchronize your schedule</p>
+                <hr>
+                <div class="integration-cards">
+                    <div class="integration-card" id="gcal-card">
+                        <div class="integration-header">
+                            <div class="integration-info">
+                                <h2>Google Calendar</h2>
+                                <p class="integration-desc">Sync events, sponsor meetings, and busy blocks directly into your schedule.</p>
+                            </div>
+                            <span id="gcal-status-badge" class="status-badge disconnected">Disconnected</span>
+                        </div>
+                        <div class="integration-body">
+                            <div class="integration-field">
+                                <label for="gcal-client-id">Google Client ID (Optional for Live OAuth)</label>
+                                <input type="text" id="gcal-client-id" placeholder="your-client-id.apps.googleusercontent.com">
+                            </div>
+                            <div class="integration-actions">
+                                <button type="button" id="gcal-connect-btn" class="primary-btn">Connect Google Calendar</button>
+                                <button type="button" id="gcal-disconnect-btn" class="secondary-btn hidden">Disconnect</button>
+                            </div>
+                            <p id="gcal-feedback" class="feedback-msg"></p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    <script src="sidebar.js"></script>
+    <script src="integrations.js"></script>
+</body>
+</html>

@@ -391,6 +391,190 @@ h2 {
     margin: 0;
 }
 
+.calendar-event-item.gcal {
+    border-left: 3px solid #4ade80;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.event-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.event-title {
+    color: #ffffff;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.event-time {
+    color: #888888;
+    font-size: 0.8rem;
+}
+
+.event-badges {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.gcal-badge {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #4ade80;
+    background-color: #0d2818;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid #166534;
+}
+
+.busy-badge {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #f87171;
+    background-color: #2b1212;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid #7f1d1d;
+}
+
+.integration-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.integration-card {
+    background-color: #000000;
+    border: 1px solid #1a1a1a;
+    border-radius: 8px;
+    padding: 24px;
+}
+
+.integration-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.integration-info h2 {
+    font-size: 1.15rem;
+    font-weight: 500;
+    color: #ffffff;
+    margin: 0 0 6px 0;
+}
+
+.integration-desc {
+    color: #888888;
+    font-size: 0.9rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.status-badge {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.status-badge.disconnected {
+    background-color: #141414;
+    color: #888888;
+    border: 1px solid #242424;
+}
+
+.status-badge.connected {
+    background-color: #0d2818;
+    color: #4ade80;
+    border: 1px solid #166534;
+}
+
+.integration-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.integration-field label {
+    color: #888888;
+    font-size: 0.85rem;
+}
+
+.integration-field input {
+    background-color: #000000;
+    border: 1px solid #242424;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.9rem;
+    color: #ffffff;
+    outline: none;
+}
+
+.integration-field input:focus {
+    border-color: #555555;
+}
+
+.integration-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.primary-btn {
+    background-color: #ffffff;
+    color: #000000;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 18px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.primary-btn:hover {
+    background-color: #e5e5e5;
+}
+
+.secondary-btn {
+    background-color: transparent;
+    color: #f87171;
+    border: 1px solid #7f1d1d;
+    border-radius: 6px;
+    padding: 10px 18px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.secondary-btn:hover {
+    background-color: #2b1212;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.feedback-msg {
+    color: #4ade80;
+    font-size: 0.85rem;
+    margin-top: 14px;
+    margin-bottom: 0;
+}
+
 @media (max-width: 768px) {
     .sidebar {
         position: fixed;
