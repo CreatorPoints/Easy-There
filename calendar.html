@@ -43,43 +43,62 @@
                 </button>
                 <div class="auth-topbar-slot"></div>
             </header>
-            <main class="container">
-                <h1>Calendar</h1>
-                <p class="subtitle">Manage dates and schedule events</p>
+            <main class="calendar-container">
+                <div class="calendar-title-bar">
+                    <h1>Calendar</h1>
+                    <p class="subtitle">Manage dates and schedule events</p>
+                </div>
                 <hr>
-                <div class="calendar-wrapper">
-                    <div class="calendar-header">
-                        <h2 id="calendar-month-year"></h2>
-                        <div class="calendar-controls">
-                            <button id="calendar-prev" class="icon-button" aria-label="Previous month">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="15 18 9 12 15 6"></polyline>
-                                </svg>
-                            </button>
-                            <button id="calendar-next" class="icon-button" aria-label="Next month">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="9 18 15 12 9 6"></polyline>
-                                </svg>
-                            </button>
+                <div class="calendar-split-view">
+                    <div class="calendar-left-col">
+                        <div class="calendar-header">
+                            <h2 id="calendar-month-year"></h2>
+                            <div class="calendar-controls">
+                                <button id="calendar-prev" class="icon-button" aria-label="Previous month">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="15 18 9 12 15 6"></polyline>
+                                    </svg>
+                                </button>
+                                <button id="calendar-next" class="icon-button" aria-label="Next month">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="calendar-weekdays">
+                            <span>Su</span>
+                            <span>Mo</span>
+                            <span>Tu</span>
+                            <span>We</span>
+                            <span>Th</span>
+                            <span>Fr</span>
+                            <span>Sa</span>
+                        </div>
+                        <div id="calendar-days" class="calendar-days"></div>
+                        <div class="calendar-add-section">
+                            <form id="calendar-event-form">
+                                <input id="calendar-event-input" type="text" aria-label="Event title" required>
+                                <div class="event-time-row">
+                                    <input id="calendar-event-start" type="time" value="09:00" aria-label="Start time">
+                                    <span class="time-sep">to</span>
+                                    <input id="calendar-event-end" type="time" value="10:00" aria-label="End time">
+                                </div>
+                                <button type="submit">Add Event</button>
+                            </form>
                         </div>
                     </div>
-                    <div class="calendar-weekdays">
-                        <span>Su</span>
-                        <span>Mo</span>
-                        <span>Tu</span>
-                        <span>We</span>
-                        <span>Th</span>
-                        <span>Fr</span>
-                        <span>Sa</span>
-                    </div>
-                    <div id="calendar-days" class="calendar-days"></div>
-                    <div class="calendar-events-section">
-                        <h3 id="selected-date-heading"></h3>
-                        <form id="calendar-event-form">
-                            <input id="calendar-event-input" type="text" required>
-                            <button type="submit">Add Event</button>
-                        </form>
-                        <div id="calendar-events-list"></div>
+                    <div class="calendar-right-col">
+                        <div class="timeline-header">
+                            <div class="timeline-title-wrap">
+                                <h3 id="selected-date-heading"></h3>
+                                <span id="timeline-mode-badge" class="timeline-mode-badge hidden">Preview</span>
+                            </div>
+                        </div>
+                        <div id="all-day-events" class="all-day-events-wrap"></div>
+                        <div class="day-timeline-scroll" id="day-timeline-scroll">
+                            <div class="day-timeline-grid" id="day-timeline-grid"></div>
+                        </div>
                     </div>
                 </div>
             </main>

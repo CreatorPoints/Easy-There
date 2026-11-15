@@ -154,15 +154,21 @@ function parseGoogleEvents(items) {
         }
 
         let timeStr = "All Day";
+        let startMinutes = null;
+        let endMinutes = null;
         if (item.start?.dateTime && item.end?.dateTime) {
             const startDate = new Date(item.start.dateTime);
             const endDate = new Date(item.end.dateTime);
             timeStr = `${startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+            startMinutes = startDate.getHours() * 60 + startDate.getMinutes();
+            endMinutes = endDate.getHours() * 60 + endDate.getMinutes();
         }
 
         events[dateKey].push({
             title: item.summary || "Busy",
             time: timeStr,
+            startMinutes: startMinutes,
+            endMinutes: endMinutes,
             busy: item.transparency !== "transparent",
             source: "google"
         });
