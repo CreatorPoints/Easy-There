@@ -16,25 +16,39 @@ let db = null;
 let currentUser = null;
 const userListeners = [];
 
+function getDb() {
+    if (!currentUser || typeof firebase === "undefined") return null;
+    if (!db) {
+        try {
+            db = firebase.firestore();
+            db.settings({
+                experimentalForceLongPolling: true
+            });
+        } catch (e) {
+            db = null;
+        }
+    }
+    return db;
+}
+
 function initFirebase() {
     if (typeof firebase === "undefined") return;
     if (!firebase.apps.length) {
         firebase.initializeApp(firebaseConfig);
     }
     auth = firebase.auth();
-    try {
-        db = firebase.firestore();
-    } catch (e) {
-        db = null;
-    }
 
     auth.onAuthStateChanged(function(user) {
         currentUser = user;
+        if (!user) {
+            db = null;
+        }
         renderGlobalAuthUI(user);
         userListeners.forEach(function(fn) {
             fn(user);
         });
     }, function() {
+        db = null;
         renderGlobalAuthUI(null);
     });
 }
@@ -99,44 +113,64 @@ function onUserChanged(callback) {
 }
 
 async function syncTodosToCloud(todos) {
-    if (!db || !currentUser) return;
+    const database = getDb();
+    if (!database || !currentUser) return;
     try {
-        await db.collection("users").doc(currentUser.uid).set({
+        await database.collection("users").doc(currentUser.uid).set({
             todos: todos,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
-    } catch (e) {}
+    } catch (e) {
+        if (e && (e.code === "unavailable" || String(e).includes("BLOCKED"))) {
+            db = null;
+        }
+    }
 }
 
 async function fetchTodosFromCloud() {
-    if (!db || !currentUser) return null;
+    const database = getDb();
+    if (!database || !currentUser) return null;
     try {
-        const doc = await db.collection("users").doc(currentUser.uid).get();
+        const doc = await database.collection("users").doc(currentUser.uid).get();
         if (doc.exists && doc.data().todos) {
             return doc.data().todos;
         }
-    } catch (e) {}
+    } catch (e) {
+        if (e && (e.code === "unavailable" || String(e).includes("BLOCKED"))) {
+            db = null;
+        }
+    }
     return null;
 }
 
 async function syncEventsToCloud(events) {
-    if (!db || !currentUser) return;
+    const database = getDb();
+    if (!database || !currentUser) return;
     try {
-        await db.collection("users").doc(currentUser.uid).set({
+        await database.collection("users").doc(currentUser.uid).set({
             events: events,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
-    } catch (e) {}
+    } catch (e) {
+        if (e && (e.code === "unavailable" || String(e).includes("BLOCKED"))) {
+            db = null;
+        }
+    }
 }
 
 async function fetchEventsFromCloud() {
-    if (!db || !currentUser) return null;
+    const database = getDb();
+    if (!database || !currentUser) return null;
     try {
-        const doc = await db.collection("users").doc(currentUser.uid).get();
+        const doc = await database.collection("users").doc(currentUser.uid).get();
         if (doc.exists && doc.data().events) {
             return doc.data().events;
         }
-    } catch (e) {}
+    } catch (e) {
+        if (e && (e.code === "unavailable" || String(e).includes("BLOCKED"))) {
+            db = null;
+        }
+    }
     return null;
 }
 

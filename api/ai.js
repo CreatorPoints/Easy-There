@@ -9,29 +9,105 @@ module.exports = async function handler(req, res) {
         return res.status(500).json({ error: 'AI key not configured on server' });
     }
 
-    const { prompt, today, calendarEvents, gcalEvents, todos } = req.body || {};
+    const {
+        prompt,
+        currentDate,
+        currentTime,
+        currentDayOfWeek,
+        timezone,
+        currentPage,
+        selectedDate,
+        calendarEvents,
+        gcalEvents,
+        todos,
+        history
+    } = req.body || {};
+
     if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
         return res.status(400).json({ error: 'Prompt is required' });
     }
 
     const sanitizedPrompt = prompt.trim().slice(0, 500);
 
-    const systemPrompt = `You are Easy There AI, an assistant embedded in the user's personal planner and calendar app.
-Current date: ${today || new Date().toISOString().slice(0, 10)}.
+    function formatSchedule(todayStr, manual, gcal) {
+        const combined = {};
 
-User's Calendar Events:
-${JSON.stringify(calendarEvents || {}, null, 2)}
+        for (const [date, list] of Object.entries(manual || {})) {
+            if (!combined[date]) combined[date] = [];
+            if (Array.isArray(list)) {
+                list.forEach(item => {
+                    const title = typeof item === 'string' ? item : (item.title || item.text || 'Untitled');
+                    const time = typeof item === 'string' ? 'All Day' : (item.time || 'All Day');
+                    combined[date].push({ title, time, source: 'Manual Event' });
+                });
+            }
+        }
 
-User's Google Calendar Events:
-${JSON.stringify(gcalEvents || {}, null, 2)}
+        for (const [date, list] of Object.entries(gcal || {})) {
+            if (!combined[date]) combined[date] = [];
+            if (Array.isArray(list)) {
+                list.forEach(item => {
+                    combined[date].push({
+                        title: item.title || 'Busy',
+                        time: item.time || 'All Day',
+                        source: 'Google Calendar'
+                    });
+                });
+            }
+        }
 
-User's To-Do List:
-${JSON.stringify(todos || [], null, 2)}
+        const sortedDates = Object.keys(combined).sort();
+        if (sortedDates.length === 0) {
+            return 'No events currently scheduled.';
+        }
 
-Instructions:
-1. Always respond in valid JSON matching this schema:
+        const lines = [];
+        sortedDates.forEach(date => {
+            let label = date;
+            if (date === todayStr) label = `${date} (TODAY)`;
+            lines.push(`Date: ${label}`);
+            combined[date].forEach(ev => {
+                lines.push(`  - [${ev.time}] ${ev.title} (${ev.source})`);
+            });
+        });
+
+        return lines.join('\n');
+    }
+
+    function formatTodos(list) {
+        if (!Array.isArray(list) || list.length === 0) {
+            return 'No to-dos currently.';
+        }
+        return list.map((item, idx) => {
+            const text = typeof item === 'string' ? item : (item.text || '');
+            const status = typeof item === 'object' && item.completed ? '[Completed]' : '[Pending]';
+            return `${idx + 1}. ${status} ${text}`;
+        }).join('\n');
+    }
+
+    const todayVal = currentDate || new Date().toISOString().slice(0, 10);
+    const scheduleText = formatSchedule(todayVal, calendarEvents, gcalEvents);
+    const todosText = formatTodos(todos);
+
+    const systemPrompt = `You are Easy There AI, the intelligent personal assistant built directly into the user's planner app.
+
+TEMPORAL CONTEXT:
+- Current Date: ${todayVal} (${currentDayOfWeek || ''})
+- Current Time: ${currentTime || ''}
+- User Timezone: ${timezone || 'UTC'}
+- Active Page: ${currentPage || 'Planner'}
+${selectedDate ? `- Selected Date in Calendar View: ${selectedDate}` : ''}
+
+USER'S SCHEDULE (ALL CALENDAR & GCAL EVENTS):
+${scheduleText}
+
+USER'S TO-DO LIST:
+${todosText}
+
+CORE CAPABILITIES & RULES:
+1. RESPONSE FORMAT: You MUST ALWAYS reply in valid JSON with this schema:
 {
-  "message": "A clear, concise, direct response answering the user or confirming the action.",
+  "message": "Direct, clear and concise response.",
   "action": null | {
     "type": "create_event",
     "title": "string",
@@ -45,23 +121,39 @@ Instructions:
   }
 }
 
-2. Answering questions (e.g. "When is the next daily meeting?", "What do I have today?", "Show my tasks"):
-- Look through calendar events and Google Calendar events starting from the current date onwards.
-- Find matching event(s) and provide a concise answer stating the event title, date, and time.
+2. ANSWERING QUESTIONS (e.g. "When is the next daily meeting?", "What's on my schedule?", "Do I have any tasks?"):
+- When the user asks "When is the next [X]?", search the schedule chronologically starting from the current date and current time.
+- If an event is scheduled today but its time has already passed relative to Current Time, find the next upcoming occurrence on future dates.
+- Answer clearly stating the event title, date, day of week, and time.
 - Set "action": null.
 
-3. Scheduling/creating an event (e.g. "schedule meeting tomorrow at 3pm", "add lunch with team on Friday 12pm to 1pm"):
+3. CONVERSATIONAL CONTEXT & PRONOUNS:
+- Pay close attention to recent conversation history. If the user refers to "it", "that meeting", "the second task", "earlier", or asks follow-up questions, resolve references using the conversation history.
+
+4. SCHEDULING EVENTS (e.g. "schedule lunch tomorrow at 1pm", "add sync on Friday 3pm to 4pm"):
 - Set "action.type": "create_event".
-- Compute the target "date" (YYYY-MM-DD) relative to current date.
-- Set "title", "time" (e.g. "3:00 PM - 4:00 PM"), "startMinutes" (0-1439), and "endMinutes" (startMinutes + duration, default 60 min).
-- State what you scheduled in "message".
+- Compute exact "date" (YYYY-MM-DD) using the current date and day of week. If user is in Calendar view and refers to "this date" or "here", use Selected Date.
+- Set "title", "time" (e.g. "1:00 PM - 2:00 PM"), "startMinutes" (0-1439), and "endMinutes".
+- State the confirmed event details in "message".
 
-4. Creating a to-do/task (e.g. "add task buy groceries", "remind me to pay bills"):
+5. CREATING TO-DOS (e.g. "add to-do buy groceries", "remind me to call the dentist"):
 - Set "action.type": "create_todo".
-- Set "action.text": the task description.
-- State what you added in "message".
+- Set "action.text" to the task description.
+- Confirm in "message".
 
-Keep "message" concise, authentic, and without conversational fluff. Never wrap output in markdown code blocks.`;
+Keep "message" concise, authentic, and without conversational filler. Never output markdown code blocks.`;
+
+    const messages = [{ role: 'system', content: systemPrompt }];
+
+    if (Array.isArray(history)) {
+        history.slice(-6).forEach(h => {
+            if (h && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string') {
+                messages.push({ role: h.role, content: h.content.slice(0, 500) });
+            }
+        });
+    }
+
+    messages.push({ role: 'user', content: sanitizedPrompt });
 
     try {
         const response = await fetch('https://ai.hackclub.com/proxy/v1/chat/completions', {
@@ -73,10 +165,7 @@ Keep "message" concise, authentic, and without conversational fluff. Never wrap 
             body: JSON.stringify({
                 model: 'google/gemini-2.5-flash',
                 response_format: { type: 'json_object' },
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: sanitizedPrompt }
-                ],
+                messages: messages,
                 temperature: 0.2
             })
         });

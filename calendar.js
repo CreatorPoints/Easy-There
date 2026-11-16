@@ -520,6 +520,9 @@ window.EasyThereCalendar = {
         gcalEvents = loadGcalEvents();
         renderCalendar();
         renderDayTimeline(selectedYear, selectedMonth, selectedDay, false);
+    },
+    getSelectedDate: function() {
+        return getDateKey(selectedYear, selectedMonth, selectedDay);
     }
 };
 

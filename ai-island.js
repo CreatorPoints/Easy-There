@@ -10,12 +10,45 @@
 
     if (!form || !input || !card || !responseEl) return;
 
+    let conversationHistory = [];
+
     function getTodayString() {
         const now = new Date();
         const y = now.getFullYear();
         const m = String(now.getMonth() + 1).padStart(2, "0");
         const d = String(now.getDate()).padStart(2, "0");
         return `${y}-${m}-${d}`;
+    }
+
+    function getCurrentTime() {
+        const now = new Date();
+        return now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    }
+
+    function getCurrentDayOfWeek() {
+        return new Date().toLocaleDateString("en-US", { weekday: "long" });
+    }
+
+    function getTimezone() {
+        try {
+            return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+        } catch (e) {
+            return "UTC";
+        }
+    }
+
+    function getCurrentPage() {
+        const path = window.location.pathname.toLowerCase();
+        if (path.includes("calendar")) return "Calendar";
+        if (path.includes("integration")) return "Integrations";
+        return "To-Do";
+    }
+
+    function getSelectedDate() {
+        if (window.EasyThereCalendar && window.EasyThereCalendar.getSelectedDate) {
+            return window.EasyThereCalendar.getSelectedDate();
+        }
+        return null;
     }
 
     function getCalendarEvents() {
@@ -28,6 +61,10 @@
     }
 
     function getGcalEvents() {
+        if (window.EasyThereFirebase && window.EasyThereFirebase.getGoogleCalendarEvents) {
+            const events = window.EasyThereFirebase.getGoogleCalendarEvents();
+            if (events && Object.keys(events).length > 0) return events;
+        }
         try {
             const raw = localStorage.getItem("easy_there_gcal_events");
             return raw ? JSON.parse(raw) : {};
@@ -76,18 +113,26 @@
         setLoading(true);
 
         try {
+            const payload = {
+                prompt: prompt,
+                currentDate: getTodayString(),
+                currentTime: getCurrentTime(),
+                currentDayOfWeek: getCurrentDayOfWeek(),
+                timezone: getTimezone(),
+                currentPage: getCurrentPage(),
+                selectedDate: getSelectedDate(),
+                calendarEvents: getCalendarEvents(),
+                gcalEvents: getGcalEvents(),
+                todos: getTodos(),
+                history: conversationHistory.slice(-6)
+            };
+
             const res = await fetch("/api/ai", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({
-                    prompt: prompt,
-                    today: getTodayString(),
-                    calendarEvents: getCalendarEvents(),
-                    gcalEvents: getGcalEvents(),
-                    todos: getTodos()
-                })
+                body: JSON.stringify(payload)
             });
 
             const data = await res.json();
@@ -138,7 +183,15 @@
                 }
             }
 
-            showResponse(data.message || "Done.", false);
+            const responseMessage = data.message || "Done.";
+            showResponse(responseMessage, false);
+
+            conversationHistory.push({ role: "user", content: prompt });
+            conversationHistory.push({ role: "assistant", content: responseMessage });
+            if (conversationHistory.length > 10) {
+                conversationHistory = conversationHistory.slice(-10);
+            }
+
             input.value = "";
         } catch (err) {
             showResponse("Unable to connect to AI service.", true);
