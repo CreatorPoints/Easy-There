@@ -107,4 +107,11 @@ if (window.EasyThereFirebase) {
     });
 }
 
+window.EasyThereTodo = {
+    reload: function() {
+        todos = loadTodos();
+        renderTodos();
+    }
+};
+
 renderTodos();

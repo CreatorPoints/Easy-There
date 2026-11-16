@@ -514,5 +514,14 @@ if (window.EasyThereFirebase) {
     });
 }
 
+window.EasyThereCalendar = {
+    reload: function() {
+        events = loadEvents();
+        gcalEvents = loadGcalEvents();
+        renderCalendar();
+        renderDayTimeline(selectedYear, selectedMonth, selectedDay, false);
+    }
+};
+
 renderCalendar();
 renderDayTimeline(selectedYear, selectedMonth, selectedDay, false);
