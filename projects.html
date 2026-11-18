@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Easy There - Projects</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="firebase-app.js"></script>
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <span class="app-brand">Easy There</span>
+                <button id="sidebar-close" class="icon-button" aria-label="Close sidebar">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/" class="nav-item">To-Do</a>
+                <a href="/projects" class="nav-item active">Projects</a>
+                <a href="/calendar" class="nav-item">Calendar</a>
+                <a href="/conference" class="nav-item">Conference</a>
+                <a href="/ai" class="nav-item">AI</a>
+                <a href="/integrations" class="nav-item">Integrations</a>
+            </nav>
+        </aside>
+        <div class="main-wrapper">
+            <header class="topbar">
+                <button id="sidebar-toggle" class="icon-button" aria-label="Toggle sidebar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
+                <div class="auth-topbar-slot"></div>
+            </header>
+            <main class="container projects-container">
+                <div class="projects-header-row">
+                    <div>
+                        <h1>Projects</h1>
+                        <p class="subtitle">Organize initiatives, track milestones, and manage project tasks.</p>
+                    </div>
+                    <button type="button" class="primary-btn" id="new-project-toggle-btn">+ New Project</button>
+                </div>
+                <hr>
+                <div class="project-form-card hidden" id="new-project-card">
+                    <div class="project-form-title">Create a New Project</div>
+                    <form id="create-project-form">
+                        <div class="form-group">
+                            <label class="form-label" for="project-title-input">Project Title</label>
+                            <input type="text" id="project-title-input" class="text-input" required autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="project-desc-input">Description / Scope (Optional)</label>
+                            <textarea id="project-desc-input" class="text-input text-area" rows="2"></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group form-group-half">
+                                <label class="form-label" for="project-date-input">Target Completion Date (Optional)</label>
+                                <input type="date" id="project-date-input" class="text-input date-input">
+                            </div>
+                            <div class="form-group form-group-half">
+                                <label class="form-label">Color Accent</label>
+                                <div class="project-color-picker" id="project-color-picker">
+                                    <label class="color-option">
+                                        <input type="radio" name="project-color" value="default" checked>
+                                        <span class="color-pip pip-default"></span>
+                                    </label>
+                                    <label class="color-option">
+                                        <input type="radio" name="project-color" value="blue">
+                                        <span class="color-pip pip-blue"></span>
+                                    </label>
+                                    <label class="color-option">
+                                        <input type="radio" name="project-color" value="green">
+                                        <span class="color-pip pip-green"></span>
+                                    </label>
+                                    <label class="color-option">
+                                        <input type="radio" name="project-color" value="purple">
+                                        <span class="color-pip pip-purple"></span>
+                                    </label>
+                                    <label class="color-option">
+                                        <input type="radio" name="project-color" value="coral">
+                                        <span class="color-pip pip-coral"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-actions-row">
+                            <button type="submit" class="primary-btn">Create Project</button>
+                            <button type="button" class="secondary-btn" id="cancel-project-btn">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="projects-meta-bar">
+                    <span class="projects-meta-count"><span id="projects-count">0</span> Active Projects</span>
+                </div>
+                <div class="projects-list" id="projects-list"></div>
+            </main>
+            <div class="ai-island-container" id="ai-island">
+                <div class="ai-island-card hidden" id="ai-island-card">
+                    <div class="ai-island-card-header">
+                        <div class="ai-card-title-group">
+                            <svg class="ai-sparkle-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"/>
+                            </svg>
+                            <span class="ai-card-title">Easy There AI</span>
+                        </div>
+                        <button type="button" class="ai-card-close" id="ai-island-close" aria-label="Close response">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="ai-island-card-body" id="ai-island-response"></div>
+                </div>
+                <form class="ai-island-pill" id="ai-island-form">
+                    <div class="ai-island-left-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"/>
+                        </svg>
+                    </div>
+                    <input type="text" class="ai-island-input" id="ai-island-input" aria-label="Ask AI or schedule" required autocomplete="off">
+                    <button type="submit" class="ai-island-submit" id="ai-island-submit" aria-label="Send">
+                        <svg class="ai-submit-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="19" x2="12" y2="5"></line>
+                            <polyline points="5 12 12 5 19 12"></polyline>
+                        </svg>
+                        <div class="ai-spinner hidden" id="ai-island-spinner"></div>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <script src="projects.js"></script>
+    <script src="sidebar.js"></script>
+    <script src="ai-island.js"></script>
+</body>
+</html>

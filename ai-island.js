@@ -83,6 +83,15 @@
         }
     }
 
+    function getProjects() {
+        try {
+            const raw = localStorage.getItem("easy_there_projects");
+            return raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
     function getTranscripts() {
         try {
             const raw = localStorage.getItem("easy_there_transcripts");
@@ -134,6 +143,7 @@
                 calendarEvents: getCalendarEvents(),
                 gcalEvents: getGcalEvents(),
                 todos: getTodos(),
+                projects: getProjects(),
                 transcripts: getTranscripts(),
                 history: conversationHistory.slice(-6)
             };
@@ -190,6 +200,26 @@
                     }
                     if (window.EasyThereTodo && window.EasyThereTodo.reload) {
                         window.EasyThereTodo.reload();
+                    }
+                } else if (data.action.type === "create_project" && data.action.title) {
+                    const projects = getProjects();
+                    const newProj = {
+                        id: `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                        title: data.action.title.trim(),
+                        description: (data.action.description || "").trim(),
+                        color: "default",
+                        createdAt: new Date().toISOString(),
+                        tasks: []
+                    };
+                    projects.unshift(newProj);
+                    try {
+                        localStorage.setItem("easy_there_projects", JSON.stringify(projects));
+                    } catch (err) {}
+                    if (window.EasyThereFirebase && window.EasyThereFirebase.syncProjectsToCloud) {
+                        window.EasyThereFirebase.syncProjectsToCloud(projects);
+                    }
+                    if (window.EasyThereProjects && window.EasyThereProjects.reload) {
+                        window.EasyThereProjects.reload();
                     }
                 }
             }

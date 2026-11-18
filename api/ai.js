@@ -20,6 +20,7 @@ module.exports = async function handler(req, res) {
         calendarEvents,
         gcalEvents,
         todos,
+        projects,
         transcripts,
         history
     } = req.body || {};
@@ -110,9 +111,30 @@ module.exports = async function handler(req, res) {
         return entries.join('\n\n');
     }
 
+    function formatProjects(list) {
+        if (!Array.isArray(list) || list.length === 0) {
+            return 'No projects currently.';
+        }
+        return list.map((p, idx) => {
+            const title = p.title || p.name || 'Untitled Project';
+            const desc = p.description ? ` - ${p.description}` : '';
+            const tasks = Array.isArray(p.tasks) ? p.tasks : [];
+            const completed = tasks.filter(t => t.completed).length;
+            const total = tasks.length;
+            const progress = total > 0 ? ` (${completed}/${total} tasks completed)` : '';
+            const due = p.dueDate ? ` [Due: ${p.dueDate}]` : '';
+            let taskLines = '';
+            if (tasks.length > 0) {
+                taskLines = '\n' + tasks.map(t => `    - [${t.completed ? 'Completed' : 'Pending'}] ${t.text}`).join('\n');
+            }
+            return `${idx + 1}. ${title}${desc}${due}${progress}${taskLines}`;
+        }).join('\n');
+    }
+
     const todayVal = currentDate || new Date().toISOString().slice(0, 10);
     const scheduleText = formatSchedule(todayVal, calendarEvents, gcalEvents);
     const todosText = formatTodos(todos);
+    const projectsText = formatProjects(projects);
     const transcriptsText = formatTranscripts(transcripts);
 
     const systemPrompt = `You are Easy There AI, the intelligent personal assistant built directly into the user's planner app.
@@ -129,6 +151,9 @@ ${scheduleText}
 
 USER'S TO-DO LIST:
 ${todosText}
+
+USER'S PROJECTS:
+${projectsText}
 
 SAVED MEETING & CONFERENCE TRANSCRIPTS:
 ${transcriptsText}
@@ -147,13 +172,18 @@ CORE CAPABILITIES & RULES:
   } | {
     "type": "create_todo",
     "text": "string"
+  } | {
+    "type": "create_project",
+    "title": "string",
+    "description": "string"
   }
 }
 
-2. ANSWERING QUESTIONS (e.g. "When is the next daily meeting?", "What's on my schedule?", "Do I have any tasks?"):
+2. ANSWERING QUESTIONS (e.g. "When is the next daily meeting?", "What's on my schedule?", "Do I have any tasks?", "What projects am I working on?"):
 - When the user asks "When is the next [X]?", search the schedule chronologically starting from the current date and current time.
 - If an event is scheduled today but its time has already passed relative to Current Time, find the next upcoming occurrence on future dates.
 - Answer clearly stating the event title, date, day of week, and time.
+- Answer questions about projects, their tasks, and progress directly.
 - Set "action": null.
 
 3. CONVERSATIONAL CONTEXT & PRONOUNS:
@@ -170,7 +200,12 @@ CORE CAPABILITIES & RULES:
 - Set "action.text" to the task description.
 - Confirm in "message".
 
-6. MEETING TRANSCRIPTS & RECAPS:
+6. CREATING PROJECTS (e.g. "create project Mobile App Redesign", "start new project Portfolio"):
+- Set "action.type": "create_project".
+- Set "action.title" to the project title and "action.description" to any description provided.
+- Confirm in "message".
+
+7. MEETING TRANSCRIPTS & RECAPS:
 - You have access to all saved conference transcripts under 'SAVED MEETING & CONFERENCE TRANSCRIPTS', formatted as <roomname>-<date>.
 - When the user asks about a meeting, call, recap, discussion, or transcript (e.g. "What did we talk about in the sprint planning meeting?", "Summarize today's call", "What did guest say?"):
 - Answer accurately and concisely based on the transcript's dialogue lines.
