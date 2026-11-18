@@ -308,6 +308,169 @@
         saveCurrentSessionTranscript();
     }
 
+    let audioCtx = null;
+    let audioProcessor = null;
+    let audioSource = null;
+    let collectedSamples = [];
+    let silenceBlocks = 0;
+    let isSpeakingPhrase = false;
+    let isAudioTranscribing = false;
+
+    function encodeWav(samples, sampleRate) {
+        const buffer = new ArrayBuffer(44 + samples.length * 2);
+        const view = new DataView(buffer);
+
+        function writeString(offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+
+        writeString(0, 'RIFF');
+        view.setUint32(4, 36 + samples.length * 2, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * 2, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);
+        writeString(36, 'data');
+        view.setUint32(40, samples.length * 2, true);
+
+        let offset = 44;
+        for (let i = 0; i < samples.length; i++) {
+            let s = Math.max(-1, Math.min(1, samples[i]));
+            view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            offset += 2;
+        }
+
+        return buffer;
+    }
+
+    function sendAudioChunkForTranscription(samples, sampleRate) {
+        if (!samples || samples.length < sampleRate * 0.3) return;
+        const wavBuffer = encodeWav(samples, sampleRate);
+        const bytes = new Uint8Array(wavBuffer);
+        let binary = "";
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        const b64 = btoa(binary);
+
+        if (callTranscriptLive) {
+            callTranscriptLive.textContent = "Transcribing...";
+        }
+
+        fetch("/api/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ audio: b64, format: "wav" })
+        }).then(function(r) {
+            return r.json();
+        }).then(function(data) {
+            if (data && data.text && data.text.trim()) {
+                recordTranscriptLine(isHost ? "Host" : "Guest", data.text.trim());
+            } else if (callTranscriptLive && isTranscribing) {
+                callTranscriptLive.textContent = "Listening...";
+            }
+        }).catch(function() {
+            if (callTranscriptLive && isTranscribing) {
+                callTranscriptLive.textContent = "Listening...";
+            }
+        });
+    }
+
+    function startAudioTranscriber() {
+        if (isAudioTranscribing) return;
+        if (!localStream) return;
+
+        try {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) return;
+
+            audioCtx = new AudioContextClass({ sampleRate: 16000 });
+            if (audioCtx.state === "suspended") {
+                audioCtx.resume();
+            }
+
+            audioSource = audioCtx.createMediaStreamSource(localStream);
+            audioProcessor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+            collectedSamples = [];
+            silenceBlocks = 0;
+            isSpeakingPhrase = false;
+            isAudioTranscribing = true;
+
+            audioProcessor.onaudioprocess = function(e) {
+                if (!isTranscribing || isAudioMuted) return;
+                const inputData = e.inputBuffer.getChannelData(0);
+
+                let sum = 0;
+                for (let i = 0; i < inputData.length; i++) {
+                    sum += inputData[i] * inputData[i];
+                }
+                const rms = Math.sqrt(sum / inputData.length);
+
+                if (rms > 0.015) {
+                    isSpeakingPhrase = true;
+                    silenceBlocks = 0;
+                    for (let i = 0; i < inputData.length; i++) {
+                        collectedSamples.push(inputData[i]);
+                    }
+                    if (callTranscriptLive && callTranscriptLive.textContent === "Listening...") {
+                        callTranscriptLive.textContent = "Hearing speech...";
+                    }
+                } else if (isSpeakingPhrase) {
+                    silenceBlocks++;
+                    for (let i = 0; i < inputData.length; i++) {
+                        collectedSamples.push(inputData[i]);
+                    }
+
+                    if (silenceBlocks > 4 || collectedSamples.length > 16000 * 5) {
+                        isSpeakingPhrase = false;
+                        silenceBlocks = 0;
+                        const samplesCopy = new Float32Array(collectedSamples);
+                        collectedSamples = [];
+                        sendAudioChunkForTranscription(samplesCopy, audioCtx.sampleRate || 16000);
+                    }
+                }
+            };
+
+            audioSource.connect(audioProcessor);
+            audioProcessor.connect(audioCtx.destination);
+        } catch (e) {}
+    }
+
+    function stopAudioTranscriber() {
+        isAudioTranscribing = false;
+        isSpeakingPhrase = false;
+        silenceBlocks = 0;
+        collectedSamples = [];
+
+        if (audioProcessor) {
+            try {
+                audioProcessor.disconnect();
+            } catch (e) {}
+            audioProcessor = null;
+        }
+        if (audioSource) {
+            try {
+                audioSource.disconnect();
+            } catch (e) {}
+            audioSource = null;
+        }
+        if (audioCtx) {
+            try {
+                audioCtx.close();
+            } catch (e) {}
+            audioCtx = null;
+        }
+    }
+
     function createRecognition() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) return null;
@@ -372,9 +535,10 @@
                 return;
             }
             if (event.error === "network") {
-                if (callTranscriptLive) {
-                    callTranscriptLive.textContent = "Speech recognition network error. (Brave blocks browser speech-to-text; please use Chrome or Edge).";
-                }
+                try {
+                    rec.stop();
+                } catch (e) {}
+                startAudioTranscriber();
                 return;
             }
             if (event.error === "not-allowed" || event.error === "service-not-allowed") {
@@ -411,13 +575,8 @@
         return rec;
     }
 
-    function startTranscribing(broadcast) {
+    async function startTranscribing(broadcast) {
         if (broadcast === undefined) broadcast = true;
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            alert("Speech recognition is not supported in this browser. Please use Chrome, Brave, or Edge.");
-            return;
-        }
 
         manualStop = false;
         isTranscribing = true;
@@ -426,20 +585,29 @@
         if (callTranscriptPanel) callTranscriptPanel.classList.remove("hidden");
         if (callTranscriptLive) callTranscriptLive.textContent = "Listening...";
 
-        if (!recognition) {
-            recognition = createRecognition();
-        }
-
+        let isBrave = false;
         try {
-            recognition.start();
-        } catch (e) {
-            setTimeout(function() {
-                if (isTranscribing && !manualStop && recognition) {
-                    try {
-                        recognition.start();
-                    } catch (err) {}
+            if (navigator.brave && typeof navigator.brave.isBrave === 'function') {
+                isBrave = await navigator.brave.isBrave();
+            }
+        } catch (e) {}
+
+        if (isBrave) {
+            startAudioTranscriber();
+        } else {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                if (!recognition) {
+                    recognition = createRecognition();
                 }
-            }, 300);
+                try {
+                    recognition.start();
+                } catch (e) {
+                    startAudioTranscriber();
+                }
+            } else {
+                startAudioTranscriber();
+            }
         }
 
         if (broadcast && dataConn && dataConn.open) {
@@ -456,6 +624,8 @@
         if (broadcast === undefined) broadcast = true;
         manualStop = true;
         isTranscribing = false;
+
+        stopAudioTranscriber();
 
         if (restartTimeout) {
             clearTimeout(restartTimeout);
