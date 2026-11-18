@@ -20,6 +20,7 @@ module.exports = async function handler(req, res) {
         calendarEvents,
         gcalEvents,
         todos,
+        transcripts,
         history
     } = req.body || {};
 
@@ -85,9 +86,34 @@ module.exports = async function handler(req, res) {
         }).join('\n');
     }
 
+    function formatTranscripts(list) {
+        if (!Array.isArray(list) || list.length === 0) {
+            return 'No conference or meeting transcripts saved.';
+        }
+        const entries = [];
+        list.slice(0, 10).forEach((t, i) => {
+            const name = t.name || `${t.roomName || 'Meeting'}-${t.date || 'Unknown'}`;
+            const date = t.date || 'Unknown Date';
+            let linesText = '';
+            if (Array.isArray(t.lines)) {
+                linesText = t.lines.slice(0, 30).map(l => `  [${l.time || ''}] ${l.speaker || 'Speaker'}: ${l.text || ''}`).join('\n');
+                if (t.lines.length > 30) {
+                    linesText += `\n  ... (${t.lines.length - 30} more lines)`;
+                }
+            } else if (t.fullText) {
+                linesText = t.fullText.slice(0, 1500);
+            } else {
+                linesText = 'No dialogue recorded.';
+            }
+            entries.push(`Transcript #${i + 1}: ${name} (${date})\n${linesText}`);
+        });
+        return entries.join('\n\n');
+    }
+
     const todayVal = currentDate || new Date().toISOString().slice(0, 10);
     const scheduleText = formatSchedule(todayVal, calendarEvents, gcalEvents);
     const todosText = formatTodos(todos);
+    const transcriptsText = formatTranscripts(transcripts);
 
     const systemPrompt = `You are Easy There AI, the intelligent personal assistant built directly into the user's planner app.
 
@@ -103,6 +129,9 @@ ${scheduleText}
 
 USER'S TO-DO LIST:
 ${todosText}
+
+SAVED MEETING & CONFERENCE TRANSCRIPTS:
+${transcriptsText}
 
 CORE CAPABILITIES & RULES:
 1. RESPONSE FORMAT: You MUST ALWAYS reply in valid JSON with this schema:
@@ -141,6 +170,13 @@ CORE CAPABILITIES & RULES:
 - Set "action.text" to the task description.
 - Confirm in "message".
 
+6. MEETING TRANSCRIPTS & RECAPS:
+- You have access to all saved conference transcripts under 'SAVED MEETING & CONFERENCE TRANSCRIPTS', formatted as <roomname>-<date>.
+- When the user asks about a meeting, call, recap, discussion, or transcript (e.g. "What did we talk about in the sprint planning meeting?", "Summarize today's call", "What did guest say?"):
+- Answer accurately and concisely based on the transcript's dialogue lines.
+- Reference the transcript title (<roomname>-<date>) and date.
+- Set "action": null.
+
 Keep "message" concise, authentic, and without conversational filler. Never output markdown code blocks.`;
 
     const messages = [{ role: 'system', content: systemPrompt }];
@@ -166,6 +202,7 @@ Keep "message" concise, authentic, and without conversational filler. Never outp
                 model: 'google/gemini-2.5-flash',
                 response_format: { type: 'json_object' },
                 messages: messages,
+                max_tokens: 600,
                 temperature: 0.2
             })
         });

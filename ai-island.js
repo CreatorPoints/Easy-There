@@ -40,6 +40,7 @@
     function getCurrentPage() {
         const path = window.location.pathname.toLowerCase();
         if (path.includes("calendar")) return "Calendar";
+        if (path.includes("conference")) return "Conference";
         if (path.includes("integration")) return "Integrations";
         return "To-Do";
     }
@@ -76,6 +77,15 @@
     function getTodos() {
         try {
             const raw = localStorage.getItem("easy_there_todos");
+            return raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function getTranscripts() {
+        try {
+            const raw = localStorage.getItem("easy_there_transcripts");
             return raw ? JSON.parse(raw) : [];
         } catch (e) {
             return [];
@@ -124,6 +134,7 @@
                 calendarEvents: getCalendarEvents(),
                 gcalEvents: getGcalEvents(),
                 todos: getTodos(),
+                transcripts: getTranscripts(),
                 history: conversationHistory.slice(-6)
             };
 

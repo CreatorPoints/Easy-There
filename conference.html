@@ -53,10 +53,19 @@
                         <div class="conference-card">
                             <h2>Start a Room</h2>
                             <p class="conference-card-desc">Create a private, encrypted huddle. Zero sign-in or accounts needed.</p>
-                            <div class="conference-action-box" id="start-action-box">
-                                <button type="button" id="start-room-btn" class="primary-btn">Create Room Code</button>
-                            </div>
+                            <form id="create-room-form" class="create-room-form">
+                                <div class="conference-form-group">
+                                    <label for="create-room-input" class="conference-label">Room Name</label>
+                                    <input type="text" id="create-room-input" class="conference-input conference-name-input" required autocomplete="off" aria-label="Room name">
+                                </div>
+                                <p id="create-error" class="conference-error hidden"></p>
+                                <button type="submit" id="start-room-btn" class="primary-btn">Create Room Code</button>
+                            </form>
                             <div id="host-code-display" class="host-code-display hidden">
+                                <div class="host-room-meta">
+                                    <span class="code-label">Room</span>
+                                    <strong id="created-room-name" class="host-room-name"></strong>
+                                </div>
                                 <span class="code-label">Room Code</span>
                                 <div class="code-box">
                                     <span id="created-room-code" class="code-text"></span>
@@ -82,15 +91,39 @@
                             <p id="join-error" class="conference-error hidden"></p>
                         </div>
                     </div>
+
+                    <div class="transcripts-section">
+                        <div class="transcripts-section-header">
+                            <div class="transcripts-title-wrap">
+                                <h2>Saved Transcripts</h2>
+                                <span id="transcripts-count" class="transcripts-count-badge">0</span>
+                            </div>
+                        </div>
+                        <div id="transcripts-list" class="transcripts-list"></div>
+                    </div>
                 </div>
 
                 <div id="conference-call" class="conference-call hidden">
                     <div class="conference-call-header">
                         <div class="call-room-info">
                             <span class="call-status-dot"></span>
-                            <span class="call-room-label">Room: <strong id="active-room-code"></strong></span>
+                            <span class="call-room-label">
+                                <strong id="active-room-title">Meeting</strong>
+                                <span id="active-room-code-badge" class="call-code-badge"></span>
+                            </span>
                         </div>
                         <button type="button" id="call-copy-link-btn" class="secondary-btn small-btn">Copy Room Link</button>
+                    </div>
+
+                    <div id="call-transcript-panel" class="call-transcript-panel hidden">
+                        <div class="call-transcript-bar">
+                            <div class="transcript-rec-tag">
+                                <span class="rec-dot"></span>
+                                <span>LIVE TRANSCRIPT</span>
+                            </div>
+                            <span class="transcript-hint">Speech to text active</span>
+                        </div>
+                        <div id="call-transcript-live" class="call-transcript-live">Listening...</div>
                     </div>
 
                     <div class="conference-video-grid" id="video-grid">
@@ -128,6 +161,13 @@
                                 <line x1="12" y1="17" x2="12" y2="21"></line>
                             </svg>
                         </button>
+                        <button type="button" id="toggle-transcript-btn" class="control-btn" aria-label="Toggle AI transcript">
+                            <svg class="icon-transcript" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                <line x1="9" y1="10" x2="15" y2="10"></line>
+                                <line x1="9" y1="14" x2="13" y2="14"></line>
+                            </svg>
+                        </button>
                         <button type="button" id="leave-call-btn" class="control-btn leave-btn" aria-label="Leave call">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-6-6 19.8 19.8 0 0 1-3.12-8.68A2 2 0 0 1 3.99 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.97 9.91"></path>
@@ -136,10 +176,69 @@
                         </button>
                     </div>
                 </div>
+
+                <div id="transcript-modal" class="transcript-modal hidden">
+                    <div class="transcript-modal-overlay" id="transcript-modal-overlay"></div>
+                    <div class="transcript-modal-dialog">
+                        <div class="transcript-modal-header">
+                            <div>
+                                <h3 id="transcript-modal-title" class="transcript-modal-title"></h3>
+                                <span id="transcript-modal-meta" class="transcript-modal-meta"></span>
+                            </div>
+                            <button type="button" id="transcript-modal-close" class="icon-button" aria-label="Close transcript">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="transcript-modal-body" id="transcript-modal-body"></div>
+                        <div class="transcript-modal-actions">
+                            <button type="button" id="copy-transcript-btn" class="secondary-btn small-btn">Copy Transcript</button>
+                            <button type="button" id="delete-transcript-btn" class="danger-btn small-btn">Delete</button>
+                        </div>
+                    </div>
+                </div>
             </main>
+
+            <div class="ai-island-container" id="ai-island">
+                <div class="ai-island-card hidden" id="ai-island-card">
+                    <div class="ai-island-card-header">
+                        <div class="ai-island-title-row">
+                            <span class="ai-island-sparkle">✦</span>
+                            <span class="ai-island-title">Easy There AI</span>
+                        </div>
+                        <button type="button" class="ai-card-close" id="ai-island-close" aria-label="Close response">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="ai-island-card-body" id="ai-island-response"></div>
+                </div>
+                <form class="ai-island-pill" id="ai-island-form">
+                    <div class="ai-island-left-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2a10 10 0 1 0 10 10H12V2z"></path>
+                            <path d="M12 2a10 10 0 0 1 10 10h-10V2z"></path>
+                            <path d="M12 12L2.5 7.5"></path>
+                        </svg>
+                    </div>
+                    <input type="text" class="ai-island-input" id="ai-island-input" aria-label="Ask AI or schedule" required autocomplete="off">
+                    <button type="submit" class="ai-island-submit" id="ai-island-submit" aria-label="Send">
+                        <svg class="ai-submit-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                        <div class="ai-spinner hidden" id="ai-island-spinner"></div>
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
     <script src="sidebar.js"></script>
     <script src="conference.js"></script>
+    <script src="ai-island.js"></script>
 </body>
 </html>

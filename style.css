@@ -1197,6 +1197,326 @@ h2 {
     background-color: #991b1b;
 }
 
+.create-room-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.conference-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.conference-label {
+    font-size: 0.8rem;
+    color: #888888;
+}
+
+.conference-name-input {
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.host-room-meta {
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.host-room-name {
+    font-size: 1.05rem;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.call-code-badge {
+    font-size: 0.85rem;
+    color: #888888;
+    font-weight: 500;
+    margin-left: 6px;
+}
+
+.call-transcript-panel {
+    background-color: #0c0c0c;
+    border: 1px solid #222222;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+}
+
+.call-transcript-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.transcript-rec-tag {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #ef4444;
+    letter-spacing: 0.5px;
+}
+
+.rec-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #ef4444;
+    animation: recPulse 1.5s infinite;
+}
+
+@keyframes recPulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.3; }
+    100% { opacity: 1; }
+}
+
+.transcript-hint {
+    font-size: 0.75rem;
+    color: #666666;
+}
+
+.call-transcript-live {
+    font-size: 0.85rem;
+    color: #f0f0f0;
+    line-height: 1.4;
+    min-height: 18px;
+    font-style: italic;
+}
+
+.control-btn#toggle-transcript-btn.active {
+    background-color: #ef4444;
+    color: #ffffff;
+    border-color: #ef4444;
+}
+
+.transcripts-section {
+    margin-top: 36px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.transcripts-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.transcripts-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.transcripts-title-wrap h2 {
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin: 0;
+    color: #ffffff;
+}
+
+.transcripts-count-badge {
+    background-color: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    color: #888888;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.transcripts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.transcripts-empty {
+    padding: 24px;
+    text-align: center;
+    color: #666666;
+    background-color: #080808;
+    border: 1px dashed #1a1a1a;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.transcript-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #0c0c0c;
+    border: 1px solid #1a1a1a;
+    border-radius: 8px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.transcript-card:hover {
+    border-color: #333333;
+    background-color: #111111;
+}
+
+.transcript-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.transcript-card-title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #ffffff;
+}
+
+.transcript-card-meta {
+    font-size: 0.75rem;
+    color: #777777;
+}
+
+.transcript-card-actions {
+    display: flex;
+    align-items: center;
+}
+
+.transcript-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.transcript-modal.hidden {
+    display: none;
+}
+
+.transcript-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+}
+
+.transcript-modal-dialog {
+    position: relative;
+    z-index: 1;
+    background-color: #0e0e0e;
+    border: 1px solid #222222;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+.transcript-modal-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #1a1a1a;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.transcript-modal-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.transcript-modal-meta {
+    font-size: 0.75rem;
+    color: #777777;
+    margin-top: 2px;
+    display: block;
+}
+
+.transcript-modal-body {
+    padding: 16px 20px;
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.transcript-line {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #141414;
+}
+
+.transcript-line:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.transcript-line-meta {
+    display: flex;
+    gap: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.transcript-speaker {
+    color: #ffffff;
+}
+
+.transcript-time {
+    color: #666666;
+    font-weight: 400;
+}
+
+.transcript-line-text {
+    font-size: 0.85rem;
+    color: #d0d0d0;
+    line-height: 1.45;
+}
+
+.transcript-modal-actions {
+    padding: 12px 20px;
+    border-top: 1px solid #1a1a1a;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.danger-btn {
+    background-color: #2b1212;
+    border: 1px solid #7f1d1d;
+    color: #f87171;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.danger-btn:hover {
+    background-color: #3b1818;
+    border-color: #991b1b;
+}
+
 @media (max-width: 900px) {
     .calendar-split-view {
         flex-direction: column;
