@@ -202,6 +202,11 @@
 
         peer = new Peer(hostId);
         peer.on("open", function() {});
+        peer.on("connection", function(conn) {
+            conn.on("open", function() {
+                conn.send({ status: "ready" });
+            });
+        });
         peer.on("call", function(incomingCall) {
             incomingCall.answer(localStream);
             setupHostCall(incomingCall);
@@ -238,25 +243,11 @@
         });
     }
 
-    async function joinAsGuest(code) {
+    function joinAsGuest(code) {
         if (joinErrorEl) joinErrorEl.classList.add("hidden");
         if (joinBtn) {
             joinBtn.disabled = true;
             joinBtn.textContent = "Verifying room...";
-        }
-
-        try {
-            localStream = await initMedia();
-        } catch (err) {
-            if (joinBtn) {
-                joinBtn.disabled = false;
-                joinBtn.textContent = "Join Room";
-            }
-            if (joinErrorEl) {
-                joinErrorEl.textContent = err.message || "Could not access media devices.";
-                joinErrorEl.classList.remove("hidden");
-            }
-            return;
         }
 
         activeRoomCode = code;
@@ -299,54 +290,70 @@
         }
 
         peer.on("open", function() {
-            const outgoingCall = peer.call(hostId, localStream);
-            if (!outgoingCall) {
-                abortGuest("Invalid room code. Room does not exist or host is not active.");
-                return;
-            }
+            const conn = peer.connect(hostId, { reliable: true });
 
-            currentCall = outgoingCall;
-
-            outgoingCall.on("stream", function(remoteStream) {
+            conn.on("open", async function() {
                 if (guestTimeout) {
                     clearTimeout(guestTimeout);
                     guestTimeout = null;
                 }
-                if (joinBtn) {
-                    joinBtn.disabled = false;
-                    joinBtn.textContent = "Join Room";
+
+                try {
+                    localStream = await initMedia();
+                } catch (err) {
+                    abortGuest(err.message || "Could not access media devices.");
+                    return;
                 }
 
-                localVideo.srcObject = localStream;
-                if (localStream.getVideoTracks().length === 0) {
-                    localAvatar.classList.remove("hidden");
-                } else {
-                    localAvatar.classList.add("hidden");
+                const outgoingCall = peer.call(hostId, localStream);
+                if (!outgoingCall) {
+                    abortGuest("Invalid room code. Room does not exist or host is not active.");
+                    return;
                 }
 
-                remoteVideo.srcObject = remoteStream;
-                remoteTile.classList.remove("waiting");
-                remoteAvatar.classList.add("hidden");
-                remoteBadge.textContent = "Host";
+                currentCall = outgoingCall;
 
-                lobbyEl.classList.add("hidden");
-                callEl.classList.remove("hidden");
-                activeRoomCodeEl.textContent = code;
+                outgoingCall.on("stream", function(remoteStream) {
+                    if (joinBtn) {
+                        joinBtn.disabled = false;
+                        joinBtn.textContent = "Join Room";
+                    }
 
-                updateControlsUI();
+                    localVideo.srcObject = localStream;
+                    if (localStream.getVideoTracks().length === 0) {
+                        localAvatar.classList.remove("hidden");
+                    } else {
+                        localAvatar.classList.add("hidden");
+                    }
+
+                    remoteVideo.srcObject = remoteStream;
+                    remoteTile.classList.remove("waiting");
+                    remoteAvatar.classList.add("hidden");
+                    remoteBadge.textContent = "Host";
+
+                    lobbyEl.classList.add("hidden");
+                    callEl.classList.remove("hidden");
+                    activeRoomCodeEl.textContent = code;
+
+                    updateControlsUI();
+                });
+
+                outgoingCall.on("close", function() {
+                    resetRemote();
+                });
+
+                outgoingCall.on("error", function() {
+                    abortGuest("Connection error occurred.");
+                });
             });
 
-            outgoingCall.on("close", function() {
-                resetRemote();
-            });
-
-            outgoingCall.on("error", function() {
+            conn.on("error", function() {
                 abortGuest("Invalid room code. Room does not exist or host is not active.");
             });
 
             guestTimeout = setTimeout(function() {
                 abortGuest("Invalid room code. Room does not exist or host is not active.");
-            }, 7000);
+            }, 6000);
         });
 
         peer.on("error", function() {
