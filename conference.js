@@ -36,6 +36,7 @@
     let isAudioMuted = false;
     let isVideoMuted = false;
     let isScreenSharing = false;
+    let guestTimeout = null;
 
     function generateCode() {
         const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -48,7 +49,17 @@
 
     function getCleanCode(code) {
         if (!code) return "";
-        return code.toUpperCase().trim().replace(/[^A-Z0-9-]/g, "");
+        let clean = code.toUpperCase().trim().replace(/[^A-Z0-9-]/g, "");
+        if (/^[A-Z0-9]{4}$/.test(clean)) {
+            clean = "ET-" + clean;
+        }
+        return clean;
+    }
+
+    function isValidCode(code) {
+        if (!code || typeof code !== "string") return false;
+        const clean = getCleanCode(code);
+        return clean.length >= 4 && clean.length <= 20;
     }
 
     function getInviteUrl(code) {
@@ -72,10 +83,23 @@
     const roomFromUrl = urlParams.get("room");
     if (roomFromUrl && joinRoomInput) {
         joinRoomInput.value = getCleanCode(roomFromUrl);
+        if (!isValidCode(roomFromUrl) && joinErrorEl) {
+            joinErrorEl.textContent = "Invalid room code in link. Please check the code and try again.";
+            joinErrorEl.classList.remove("hidden");
+        }
+    }
+
+    if (joinRoomInput) {
+        joinRoomInput.addEventListener("input", function() {
+            if (joinErrorEl) {
+                joinErrorEl.classList.add("hidden");
+            }
+        });
     }
 
     if (startRoomBtn) {
         startRoomBtn.addEventListener("click", function() {
+            if (joinErrorEl) joinErrorEl.classList.add("hidden");
             activeRoomCode = generateCode();
             createdRoomCodeEl.textContent = activeRoomCode;
             startActionBox.classList.add("hidden");
@@ -114,8 +138,15 @@
     if (joinRoomForm) {
         joinRoomForm.addEventListener("submit", function(e) {
             e.preventDefault();
-            const code = getCleanCode(joinRoomInput.value);
-            if (!code) return;
+            const raw = joinRoomInput.value.trim();
+            if (!isValidCode(raw)) {
+                if (joinErrorEl) {
+                    joinErrorEl.textContent = "Invalid room code. Please enter a valid room code (e.g. ET-8492).";
+                    joinErrorEl.classList.remove("hidden");
+                }
+                return;
+            }
+            const code = getCleanCode(raw);
             joinHuddle(code, false);
         });
     }
@@ -177,7 +208,7 @@
                 setupCall(incomingCall);
             });
             peer.on("error", function(err) {
-                if (err.type === "unavailable-id") {
+                if (err && err.type === "unavailable-id") {
                     peer.destroy();
                     isHost = false;
                     connectAsGuest(guestId, hostId);
@@ -191,15 +222,36 @@
     }
 
     function connectAsGuest(guestId, hostId) {
+        if (guestTimeout) clearTimeout(guestTimeout);
+
         peer = new Peer(guestId);
         peer.on("open", function() {
             const outgoingCall = peer.call(hostId, localStream);
             if (outgoingCall) {
                 setupCall(outgoingCall);
             }
+            guestTimeout = setTimeout(function() {
+                if (remoteTile && remoteTile.classList.contains("waiting")) {
+                    endCall();
+                    if (joinErrorEl) {
+                        joinErrorEl.textContent = "Invalid room code. Room does not exist or host is not active.";
+                        joinErrorEl.classList.remove("hidden");
+                    }
+                }
+            }, 10000);
         });
-        peer.on("error", function() {
-            remoteBadge.textContent = "Could not connect to host.";
+
+        peer.on("error", function(err) {
+            if (guestTimeout) clearTimeout(guestTimeout);
+            if (err && (err.type === "peer-unavailable" || err.type === "invalid-id")) {
+                endCall();
+                if (joinErrorEl) {
+                    joinErrorEl.textContent = "Invalid room code. Room does not exist or host is not active.";
+                    joinErrorEl.classList.remove("hidden");
+                }
+            } else {
+                remoteBadge.textContent = "Could not connect to host.";
+            }
         });
     }
 
@@ -207,6 +259,10 @@
         currentCall = call;
 
         call.on("stream", function(remoteStream) {
+            if (guestTimeout) {
+                clearTimeout(guestTimeout);
+                guestTimeout = null;
+            }
             remoteVideo.srcObject = remoteStream;
             remoteTile.classList.remove("waiting");
             remoteAvatar.classList.add("hidden");
@@ -214,10 +270,18 @@
         });
 
         call.on("close", function() {
+            if (guestTimeout) {
+                clearTimeout(guestTimeout);
+                guestTimeout = null;
+            }
             resetRemote();
         });
 
         call.on("error", function() {
+            if (guestTimeout) {
+                clearTimeout(guestTimeout);
+                guestTimeout = null;
+            }
             resetRemote();
         });
     }
@@ -344,6 +408,11 @@
     }
 
     function endCall() {
+        if (guestTimeout) {
+            clearTimeout(guestTimeout);
+            guestTimeout = null;
+        }
+
         stopScreenShare();
 
         if (localStream) {
