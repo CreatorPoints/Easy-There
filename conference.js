@@ -9,6 +9,7 @@
     const joinRoomForm = document.getElementById("join-room-form");
     const joinRoomInput = document.getElementById("join-room-input");
     const joinErrorEl = document.getElementById("join-error");
+    const joinBtn = joinRoomForm ? joinRoomForm.querySelector("button[type='submit']") : null;
 
     const lobbyEl = document.getElementById("conference-lobby");
     const callEl = document.getElementById("conference-call");
@@ -130,7 +131,7 @@
     if (enterAsHostBtn) {
         enterAsHostBtn.addEventListener("click", function() {
             if (activeRoomCode) {
-                joinHuddle(activeRoomCode, true);
+                joinAsHost(activeRoomCode);
             }
         });
     }
@@ -147,7 +148,7 @@
                 return;
             }
             const code = getCleanCode(raw);
-            joinHuddle(code, false);
+            joinAsGuest(code);
         });
     }
 
@@ -171,10 +172,10 @@
         }
     }
 
-    async function joinHuddle(code, hostFlag) {
+    async function joinAsHost(code) {
         if (joinErrorEl) joinErrorEl.classList.add("hidden");
         activeRoomCode = code;
-        isHost = hostFlag;
+        isHost = true;
 
         try {
             localStream = await initMedia();
@@ -198,91 +199,158 @@
         activeRoomCodeEl.textContent = code;
 
         const hostId = `easythere-huddle-${code.toLowerCase()}-host`;
-        const guestId = `easythere-huddle-${code.toLowerCase()}-guest-${Math.random().toString(36).substring(2, 7)}`;
 
-        if (isHost) {
-            peer = new Peer(hostId);
-            peer.on("open", function() {});
-            peer.on("call", function(incomingCall) {
-                incomingCall.answer(localStream);
-                setupCall(incomingCall);
-            });
-            peer.on("error", function(err) {
-                if (err && err.type === "unavailable-id") {
-                    peer.destroy();
-                    isHost = false;
-                    connectAsGuest(guestId, hostId);
+        peer = new Peer(hostId);
+        peer.on("open", function() {});
+        peer.on("call", function(incomingCall) {
+            incomingCall.answer(localStream);
+            setupHostCall(incomingCall);
+        });
+        peer.on("error", function(err) {
+            if (err && err.type === "unavailable-id") {
+                endCall();
+                if (joinErrorEl) {
+                    joinErrorEl.textContent = "Room is already active. Please enter as guest.";
+                    joinErrorEl.classList.remove("hidden");
                 }
-            });
-        } else {
-            connectAsGuest(guestId, hostId);
-        }
+            }
+        });
 
         updateControlsUI();
     }
 
-    function connectAsGuest(guestId, hostId) {
-        if (guestTimeout) clearTimeout(guestTimeout);
-
-        peer = new Peer(guestId);
-        peer.on("open", function() {
-            const outgoingCall = peer.call(hostId, localStream);
-            if (outgoingCall) {
-                setupCall(outgoingCall);
-            }
-            guestTimeout = setTimeout(function() {
-                if (remoteTile && remoteTile.classList.contains("waiting")) {
-                    endCall();
-                    if (joinErrorEl) {
-                        joinErrorEl.textContent = "Invalid room code. Room does not exist or host is not active.";
-                        joinErrorEl.classList.remove("hidden");
-                    }
-                }
-            }, 10000);
-        });
-
-        peer.on("error", function(err) {
-            if (guestTimeout) clearTimeout(guestTimeout);
-            if (err && (err.type === "peer-unavailable" || err.type === "invalid-id")) {
-                endCall();
-                if (joinErrorEl) {
-                    joinErrorEl.textContent = "Invalid room code. Room does not exist or host is not active.";
-                    joinErrorEl.classList.remove("hidden");
-                }
-            } else {
-                remoteBadge.textContent = "Could not connect to host.";
-            }
-        });
-    }
-
-    function setupCall(call) {
+    function setupHostCall(call) {
         currentCall = call;
 
         call.on("stream", function(remoteStream) {
-            if (guestTimeout) {
-                clearTimeout(guestTimeout);
-                guestTimeout = null;
-            }
             remoteVideo.srcObject = remoteStream;
             remoteTile.classList.remove("waiting");
             remoteAvatar.classList.add("hidden");
-            remoteBadge.textContent = isHost ? "Guest" : "Host";
+            remoteBadge.textContent = "Guest";
         });
 
         call.on("close", function() {
-            if (guestTimeout) {
-                clearTimeout(guestTimeout);
-                guestTimeout = null;
-            }
             resetRemote();
         });
 
         call.on("error", function() {
+            resetRemote();
+        });
+    }
+
+    async function joinAsGuest(code) {
+        if (joinErrorEl) joinErrorEl.classList.add("hidden");
+        if (joinBtn) {
+            joinBtn.disabled = true;
+            joinBtn.textContent = "Verifying room...";
+        }
+
+        try {
+            localStream = await initMedia();
+        } catch (err) {
+            if (joinBtn) {
+                joinBtn.disabled = false;
+                joinBtn.textContent = "Join Room";
+            }
+            if (joinErrorEl) {
+                joinErrorEl.textContent = err.message || "Could not access media devices.";
+                joinErrorEl.classList.remove("hidden");
+            }
+            return;
+        }
+
+        activeRoomCode = code;
+        isHost = false;
+
+        const hostId = `easythere-huddle-${code.toLowerCase()}-host`;
+        const guestId = `easythere-huddle-${code.toLowerCase()}-guest-${Math.random().toString(36).substring(2, 7)}`;
+
+        if (guestTimeout) clearTimeout(guestTimeout);
+
+        peer = new Peer(guestId);
+
+        function abortGuest(errorMsg) {
             if (guestTimeout) {
                 clearTimeout(guestTimeout);
                 guestTimeout = null;
             }
-            resetRemote();
+            if (localStream) {
+                localStream.getTracks().forEach(function(t) {
+                    t.stop();
+                });
+                localStream = null;
+            }
+            if (currentCall) {
+                currentCall.close();
+                currentCall = null;
+            }
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+            if (joinBtn) {
+                joinBtn.disabled = false;
+                joinBtn.textContent = "Join Room";
+            }
+            if (joinErrorEl) {
+                joinErrorEl.textContent = errorMsg;
+                joinErrorEl.classList.remove("hidden");
+            }
+        }
+
+        peer.on("open", function() {
+            const outgoingCall = peer.call(hostId, localStream);
+            if (!outgoingCall) {
+                abortGuest("Invalid room code. Room does not exist or host is not active.");
+                return;
+            }
+
+            currentCall = outgoingCall;
+
+            outgoingCall.on("stream", function(remoteStream) {
+                if (guestTimeout) {
+                    clearTimeout(guestTimeout);
+                    guestTimeout = null;
+                }
+                if (joinBtn) {
+                    joinBtn.disabled = false;
+                    joinBtn.textContent = "Join Room";
+                }
+
+                localVideo.srcObject = localStream;
+                if (localStream.getVideoTracks().length === 0) {
+                    localAvatar.classList.remove("hidden");
+                } else {
+                    localAvatar.classList.add("hidden");
+                }
+
+                remoteVideo.srcObject = remoteStream;
+                remoteTile.classList.remove("waiting");
+                remoteAvatar.classList.add("hidden");
+                remoteBadge.textContent = "Host";
+
+                lobbyEl.classList.add("hidden");
+                callEl.classList.remove("hidden");
+                activeRoomCodeEl.textContent = code;
+
+                updateControlsUI();
+            });
+
+            outgoingCall.on("close", function() {
+                resetRemote();
+            });
+
+            outgoingCall.on("error", function() {
+                abortGuest("Invalid room code. Room does not exist or host is not active.");
+            });
+
+            guestTimeout = setTimeout(function() {
+                abortGuest("Invalid room code. Room does not exist or host is not active.");
+            }, 7000);
+        });
+
+        peer.on("error", function() {
+            abortGuest("Invalid room code. Room does not exist or host is not active.");
         });
     }
 
@@ -439,6 +507,11 @@
         lobbyEl.classList.remove("hidden");
         startActionBox.classList.remove("hidden");
         hostCodeDisplay.classList.add("hidden");
+
+        if (joinBtn) {
+            joinBtn.disabled = false;
+            joinBtn.textContent = "Join Room";
+        }
 
         isAudioMuted = false;
         isVideoMuted = false;
