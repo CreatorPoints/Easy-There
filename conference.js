@@ -63,6 +63,8 @@
     let guestTimeout = null;
 
     let isTranscribing = false;
+    let manualStop = false;
+    let restartTimeout = null;
     let recognition = null;
     let currentSessionId = null;
     let currentTranscriptLines = [];
@@ -254,16 +256,46 @@
         renderTranscriptsList();
     }
 
-    function recordTranscriptLine(speaker, text) {
-        const timeStr = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
-        const line = {
+    function getEnglishLanguage() {
+        try {
+            const navLang = navigator.language || "en-US";
+            if (navLang.toLowerCase().startsWith("en")) {
+                return navLang;
+            }
+        } catch (e) {}
+        return "en-US";
+    }
+
+    function mergeOrAppendTranscriptLine(speaker, text, timeStr) {
+        if (!text || !text.trim()) return null;
+        const cleanText = text.trim();
+        const now = Date.now();
+        const time = timeStr || new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+
+        if (currentTranscriptLines.length > 0) {
+            const last = currentTranscriptLines[currentTranscriptLines.length - 1];
+            if (last.speaker === speaker && (now - (last.timestamp || 0) < 4000)) {
+                last.text = (last.text + " " + cleanText).trim();
+                last.timestamp = now;
+                return last;
+            }
+        }
+
+        const newLine = {
             speaker: speaker,
-            time: timeStr,
-            text: text
+            time: time,
+            text: cleanText,
+            timestamp: now
         };
-        currentTranscriptLines.push(line);
+        currentTranscriptLines.push(newLine);
+        return newLine;
+    }
+
+    function recordTranscriptLine(speaker, text) {
+        const line = mergeOrAppendTranscriptLine(speaker, text);
+        if (!line) return;
         if (callTranscriptLive) {
-            callTranscriptLive.textContent = `${speaker}: ${text}`;
+            callTranscriptLive.textContent = `${speaker}: ${line.text}`;
         }
         if (dataConn && dataConn.open) {
             try {
@@ -276,74 +308,145 @@
         saveCurrentSessionTranscript();
     }
 
-    function startTranscribing() {
+    function createRecognition() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) return null;
+
+        const rec = new SpeechRecognition();
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.lang = getEnglishLanguage();
+        rec.maxAlternatives = 1;
+
+        rec.onstart = function() {
+            if (callTranscriptLive && isTranscribing) {
+                callTranscriptLive.textContent = "Listening...";
+            }
+        };
+
+        rec.onresult = function(event) {
+            if (isAudioMuted) return;
+            let interim = "";
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const res = event.results[i];
+                const text = res[0].transcript.trim();
+                if (res.isFinal) {
+                    if (text) {
+                        recordTranscriptLine(isHost ? "Host" : "Guest", text);
+                    }
+                } else {
+                    interim += text + " ";
+                }
+            }
+            if (interim && callTranscriptLive) {
+                callTranscriptLive.textContent = interim;
+            }
+        };
+
+        rec.onerror = function(event) {
+            if (event.error === "no-speech" || event.error === "aborted") {
+                return;
+            }
+            if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+                manualStop = true;
+                stopTranscribing(true);
+            }
+        };
+
+        rec.onend = function() {
+            if (isTranscribing && !manualStop) {
+                if (restartTimeout) clearTimeout(restartTimeout);
+                restartTimeout = setTimeout(function() {
+                    if (isTranscribing && !manualStop) {
+                        try {
+                            rec.start();
+                        } catch (e) {
+                            setTimeout(function() {
+                                if (isTranscribing && !manualStop) {
+                                    try {
+                                        rec.start();
+                                    } catch (err) {}
+                                }
+                            }, 400);
+                        }
+                    }
+                }, 250);
+            }
+        };
+
+        return rec;
+    }
+
+    function startTranscribing(broadcast) {
+        if (broadcast === undefined) broadcast = true;
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             alert("Speech recognition is not supported in this browser. Please use Chrome, Brave, or Edge.");
             return;
         }
 
+        manualStop = false;
         isTranscribing = true;
+
         if (toggleTranscriptBtn) toggleTranscriptBtn.classList.add("active");
         if (callTranscriptPanel) callTranscriptPanel.classList.remove("hidden");
         if (callTranscriptLive) callTranscriptLive.textContent = "Listening...";
 
+        if (!recognition) {
+            recognition = createRecognition();
+        }
+
         try {
-            recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            recognition.lang = "en-US";
-
-            recognition.onresult = function(event) {
-                let interim = "";
-                for (let i = event.resultIndex; i < event.results.length; i++) {
-                    const res = event.results[i];
-                    const text = res[0].transcript.trim();
-                    if (res.isFinal) {
-                        if (text) {
-                            recordTranscriptLine(isHost ? "Host" : "Guest", text);
-                        }
-                    } else {
-                        interim += text + " ";
-                    }
-                }
-                if (interim && callTranscriptLive) {
-                    callTranscriptLive.textContent = interim;
-                }
-            };
-
-            recognition.onerror = function(event) {
-                if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-                    stopTranscribing();
-                }
-            };
-
-            recognition.onend = function() {
-                if (isTranscribing) {
-                    try {
-                        recognition.start();
-                    } catch (e) {}
-                }
-            };
-
             recognition.start();
         } catch (e) {
-            isTranscribing = false;
-            if (toggleTranscriptBtn) toggleTranscriptBtn.classList.remove("active");
-            if (callTranscriptPanel) callTranscriptPanel.classList.add("hidden");
+            setTimeout(function() {
+                if (isTranscribing && !manualStop && recognition) {
+                    try {
+                        recognition.start();
+                    } catch (err) {}
+                }
+            }, 300);
+        }
+
+        if (broadcast && dataConn && dataConn.open) {
+            try {
+                dataConn.send({
+                    type: "transcript_state",
+                    active: true
+                });
+            } catch (e) {}
         }
     }
 
-    function stopTranscribing() {
+    function stopTranscribing(broadcast) {
+        if (broadcast === undefined) broadcast = true;
+        manualStop = true;
         isTranscribing = false;
+
+        if (restartTimeout) {
+            clearTimeout(restartTimeout);
+            restartTimeout = null;
+        }
+
         if (recognition) {
             try {
                 recognition.stop();
             } catch (e) {}
             recognition = null;
         }
+
         if (toggleTranscriptBtn) toggleTranscriptBtn.classList.remove("active");
         if (callTranscriptPanel) callTranscriptPanel.classList.add("hidden");
+
+        if (broadcast && dataConn && dataConn.open) {
+            try {
+                dataConn.send({
+                    type: "transcript_state",
+                    active: false
+                });
+            } catch (e) {}
+        }
+
         saveCurrentSessionTranscript();
     }
 
@@ -356,9 +459,15 @@
                     activeRoomName = data.roomName;
                     updateRoomHeaderUI();
                 }
+            } else if (data.type === "transcript_state") {
+                if (data.active && !isTranscribing) {
+                    startTranscribing(false);
+                } else if (!data.active && isTranscribing) {
+                    stopTranscribing(false);
+                }
             } else if (data.type === "transcript_line" && data.line) {
-                currentTranscriptLines.push(data.line);
-                if (callTranscriptLive && isTranscribing) {
+                mergeOrAppendTranscriptLine(data.line.speaker, data.line.text, data.line.time);
+                if (callTranscriptLive) {
                     callTranscriptLive.textContent = `${data.line.speaker}: ${data.line.text}`;
                 }
                 saveCurrentSessionTranscript();
@@ -528,6 +637,12 @@
                     roomName: activeRoomName,
                     roomCode: activeRoomCode
                 });
+                if (isTranscribing) {
+                    conn.send({
+                        type: "transcript_state",
+                        active: true
+                    });
+                }
             });
         });
         peer.on("call", function(incomingCall) {
@@ -629,6 +744,13 @@
                 if (guestTimeout) {
                     clearTimeout(guestTimeout);
                     guestTimeout = null;
+                }
+
+                if (isTranscribing) {
+                    conn.send({
+                        type: "transcript_state",
+                        active: true
+                    });
                 }
 
                 try {
@@ -790,9 +912,9 @@
     if (toggleTranscriptBtn) {
         toggleTranscriptBtn.addEventListener("click", function() {
             if (isTranscribing) {
-                stopTranscribing();
+                stopTranscribing(true);
             } else {
-                startTranscribing();
+                startTranscribing(true);
             }
             updateControlsUI();
         });
@@ -843,7 +965,7 @@
             guestTimeout = null;
         }
 
-        stopTranscribing();
+        stopTranscribing(true);
 
         if (dataConn) {
             try {
