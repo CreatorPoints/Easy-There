@@ -318,6 +318,21 @@
         rec.lang = getEnglishLanguage();
         rec.maxAlternatives = 1;
 
+        let pendingInterim = "";
+        let interimFlushTimer = null;
+
+        function flushPendingInterim() {
+            if (interimFlushTimer) {
+                clearTimeout(interimFlushTimer);
+                interimFlushTimer = null;
+            }
+            if (pendingInterim && pendingInterim.trim()) {
+                const textToCommit = pendingInterim.trim();
+                pendingInterim = "";
+                recordTranscriptLine(isHost ? "Host" : "Guest", textToCommit);
+            }
+        }
+
         rec.onstart = function() {
             if (callTranscriptLive && isTranscribing) {
                 callTranscriptLive.textContent = "Listening...";
@@ -332,14 +347,23 @@
                 const text = res[0].transcript.trim();
                 if (res.isFinal) {
                     if (text) {
+                        if (interimFlushTimer) clearTimeout(interimFlushTimer);
+                        pendingInterim = "";
                         recordTranscriptLine(isHost ? "Host" : "Guest", text);
                     }
                 } else {
                     interim += text + " ";
                 }
             }
-            if (interim && callTranscriptLive) {
-                callTranscriptLive.textContent = interim;
+            if (interim && interim.trim()) {
+                pendingInterim = interim.trim();
+                if (callTranscriptLive) {
+                    callTranscriptLive.textContent = pendingInterim;
+                }
+                if (interimFlushTimer) clearTimeout(interimFlushTimer);
+                interimFlushTimer = setTimeout(function() {
+                    flushPendingInterim();
+                }, 1400);
             }
         };
 
@@ -347,13 +371,23 @@
             if (event.error === "no-speech" || event.error === "aborted") {
                 return;
             }
+            if (event.error === "network") {
+                if (callTranscriptLive) {
+                    callTranscriptLive.textContent = "Speech recognition network error. (Brave blocks browser speech-to-text; please use Chrome or Edge).";
+                }
+                return;
+            }
             if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+                if (callTranscriptLive) {
+                    callTranscriptLive.textContent = "Microphone permission blocked for speech recognition.";
+                }
                 manualStop = true;
                 stopTranscribing(true);
             }
         };
 
         rec.onend = function() {
+            flushPendingInterim();
             if (isTranscribing && !manualStop) {
                 if (restartTimeout) clearTimeout(restartTimeout);
                 restartTimeout = setTimeout(function() {
