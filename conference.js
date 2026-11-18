@@ -121,10 +121,130 @@
             .replace(/'/g, "&#039;");
     }
 
+    function getSavedRoomNames() {
+        try {
+            const raw = localStorage.getItem("easy_there_room_names");
+            return raw ? JSON.parse(raw) : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function saveRoomNameForCode(code, name) {
+        if (!code || !name) return;
+        try {
+            const names = getSavedRoomNames();
+            names[code.toUpperCase()] = name.trim();
+            localStorage.setItem("easy_there_room_names", JSON.stringify(names));
+        } catch (e) {}
+    }
+
+    function getRoomNameForCode(code) {
+        if (!code) return "";
+        const clean = getCleanCode(code).toUpperCase();
+        const names = getSavedRoomNames();
+        if (names[clean]) return names[clean];
+        const raw = localStorage.getItem("easy_there_transcripts");
+        const transcripts = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(transcripts)) {
+            const found = transcripts.find(function(t) {
+                return t.roomCode && t.roomCode.toUpperCase() === clean && t.roomName && !t.roomName.startsWith("Meeting");
+            });
+            if (found) return found.roomName;
+        }
+        return "";
+    }
+
+    function consolidateTranscripts(list) {
+        if (!Array.isArray(list) || list.length === 0) return [];
+
+        const namedByDate = {};
+        list.forEach(function(item) {
+            if (!item || !item.name) return;
+            if (item.roomCode && (!item.roomName || item.roomName.startsWith("Meeting"))) {
+                const resolved = getRoomNameForCode(item.roomCode);
+                if (resolved) {
+                    item.roomName = resolved;
+                    item.name = `${resolved}-${item.date}`;
+                }
+            }
+            if (item.date && item.name && !item.name.startsWith("Meeting-")) {
+                if (!namedByDate[item.date]) {
+                    namedByDate[item.date] = [];
+                }
+                namedByDate[item.date].push(item);
+            }
+        });
+
+        const merged = [];
+        const map = new Map();
+
+        list.forEach(function(item) {
+            if (!item || !item.name) return;
+
+            let key = "";
+            if (item.roomCode) {
+                key = `${item.roomCode.toUpperCase()}-${item.date}`;
+            } else if (item.name.startsWith("Meeting-") && namedByDate[item.date] && namedByDate[item.date].length > 0) {
+                const target = namedByDate[item.date][0];
+                key = target.roomCode ? `${target.roomCode.toUpperCase()}-${target.date}` : target.name;
+                item.name = target.name;
+                item.roomName = target.roomName;
+                item.roomCode = target.roomCode;
+                item.id = target.id || item.id;
+            } else {
+                key = item.name;
+            }
+
+            if (map.has(key)) {
+                const existing = map.get(key);
+                if (existing.name.startsWith("Meeting-") && !item.name.startsWith("Meeting-")) {
+                    existing.name = item.name;
+                    existing.roomName = item.roomName;
+                    existing.roomCode = item.roomCode || existing.roomCode;
+                }
+                if (!existing.roomCode && item.roomCode) {
+                    existing.roomCode = item.roomCode;
+                }
+                if (Array.isArray(item.lines)) {
+                    const existingLines = Array.isArray(existing.lines) ? existing.lines : [];
+                    const lineSignatures = new Set(existingLines.map(function(l) {
+                        return `${l.speaker}:${l.text}:${l.time}`;
+                    }));
+                    item.lines.forEach(function(l) {
+                        const sig = `${l.speaker}:${l.text}:${l.time}`;
+                        if (!lineSignatures.has(sig)) {
+                            existingLines.push(l);
+                            lineSignatures.add(sig);
+                        }
+                    });
+                    existingLines.sort(function(a, b) {
+                        return (a.timestamp || 0) - (b.timestamp || 0);
+                    });
+                    existing.lines = existingLines;
+                    existing.fullText = existing.lines.map(function(l) {
+                        return `[${l.time}] ${l.speaker}: ${l.text}`;
+                    }).join("\n");
+                }
+            } else {
+                map.set(key, item);
+                merged.push(item);
+            }
+        });
+
+        try {
+            localStorage.setItem("easy_there_transcripts", JSON.stringify(merged));
+        } catch (e) {}
+
+        return merged;
+    }
+
     function getSavedTranscripts() {
         try {
             const raw = localStorage.getItem("easy_there_transcripts");
-            return raw ? JSON.parse(raw) : [];
+            const list = raw ? JSON.parse(raw) : [];
+            if (!Array.isArray(list)) return [];
+            return consolidateTranscripts(list);
         } catch (e) {
             return [];
         }
@@ -212,6 +332,37 @@
         if (transcriptModal) transcriptModal.classList.add("hidden");
     }
 
+    function prepareSessionTranscript() {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, "0");
+        const d = String(now.getDate()).padStart(2, "0");
+        const dateStr = `${y}-${m}-${d}`;
+        const cleanRoomName = (activeRoomName || getRoomNameForCode(activeRoomCode) || "Meeting").trim();
+        const transcriptName = `${cleanRoomName}-${dateStr}`;
+
+        const list = getSavedTranscripts();
+        const existing = list.find(function(t) {
+            return (t.name === transcriptName && t.date === dateStr) ||
+                   (activeRoomCode && t.roomCode && t.roomCode.toUpperCase() === activeRoomCode.toUpperCase() && t.date === dateStr);
+        });
+
+        if (existing) {
+            currentSessionId = existing.id;
+            currentTranscriptLines = Array.isArray(existing.lines) ? [...existing.lines] : [];
+            if (!existing.roomCode && activeRoomCode) {
+                existing.roomCode = activeRoomCode;
+            }
+            if (existing.name.startsWith("Meeting-") && !transcriptName.startsWith("Meeting-")) {
+                existing.name = transcriptName;
+                existing.roomName = cleanRoomName;
+            }
+        } else {
+            currentSessionId = `${cleanRoomName}-${dateStr}`;
+            currentTranscriptLines = [];
+        }
+    }
+
     function saveCurrentSessionTranscript() {
         if (!currentTranscriptLines || currentTranscriptLines.length === 0) return;
         const now = new Date();
@@ -219,16 +370,18 @@
         const m = String(now.getMonth() + 1).padStart(2, "0");
         const d = String(now.getDate()).padStart(2, "0");
         const dateStr = `${y}-${m}-${d}`;
-        const cleanRoomName = (activeRoomName || "Room").trim();
+        const cleanRoomName = (activeRoomName || getRoomNameForCode(activeRoomCode) || "Meeting").trim();
         const transcriptName = `${cleanRoomName}-${dateStr}`;
 
         const list = getSavedTranscripts();
         let entry = list.find(function(t) {
-            return t.id === currentSessionId;
+            return (currentSessionId && t.id === currentSessionId) ||
+                   (t.name === transcriptName && t.date === dateStr) ||
+                   (activeRoomCode && t.roomCode && t.roomCode.toUpperCase() === activeRoomCode.toUpperCase() && t.date === dateStr);
         });
 
         if (!entry) {
-            currentSessionId = `${cleanRoomName}-${dateStr}-${Date.now()}`;
+            currentSessionId = activeRoomCode ? `${activeRoomCode.toUpperCase()}-${dateStr}` : `${cleanRoomName}-${dateStr}`;
             entry = {
                 id: currentSessionId,
                 name: transcriptName,
@@ -239,6 +392,8 @@
                 lines: []
             };
             list.unshift(entry);
+        } else {
+            currentSessionId = entry.id;
         }
 
         entry.name = transcriptName;
@@ -254,6 +409,36 @@
         } catch (e) {}
 
         renderTranscriptsList();
+    }
+
+    function renameActiveSessionTranscript(newName) {
+        if (!newName) return;
+        const cleanName = newName.trim();
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, "0");
+        const d = String(now.getDate()).padStart(2, "0");
+        const dateStr = `${y}-${m}-${d}`;
+        const newTranscriptName = `${cleanName}-${dateStr}`;
+
+        const list = getSavedTranscripts();
+        let changed = false;
+        list.forEach(function(t) {
+            if ((currentSessionId && t.id === currentSessionId) ||
+                (activeRoomCode && t.roomCode && t.roomCode.toUpperCase() === activeRoomCode.toUpperCase() && t.date === dateStr)) {
+                t.name = newTranscriptName;
+                t.roomName = cleanName;
+                if (activeRoomCode) t.roomCode = activeRoomCode;
+                changed = true;
+            }
+        });
+
+        if (changed) {
+            try {
+                localStorage.setItem("easy_there_transcripts", JSON.stringify(list));
+            } catch (e) {}
+            renderTranscriptsList();
+        }
     }
 
     function getEnglishLanguage() {
@@ -351,6 +536,7 @@
     }
 
     function sendAudioChunkForTranscription(samples, sampleRate) {
+        if (!isTranscribing || !callEl || callEl.classList.contains("hidden")) return;
         if (!samples || samples.length < sampleRate * 0.3) return;
         const wavBuffer = encodeWav(samples, sampleRate);
         const bytes = new Uint8Array(wavBuffer);
@@ -361,7 +547,7 @@
         }
         const b64 = btoa(binary);
 
-        if (callTranscriptLive) {
+        if (callTranscriptLive && isTranscribing) {
             callTranscriptLive.textContent = "Transcribing...";
         }
 
@@ -372,6 +558,7 @@
         }).then(function(r) {
             return r.json();
         }).then(function(data) {
+            if (!isTranscribing || !callEl || callEl.classList.contains("hidden")) return;
             if (data && data.text && data.text.trim()) {
                 recordTranscriptLine(isHost ? "Host" : "Guest", data.text.trim());
             } else if (callTranscriptLive && isTranscribing) {
@@ -661,7 +848,19 @@
             if (data.type === "room_info") {
                 if (data.roomName) {
                     activeRoomName = data.roomName;
+                    saveRoomNameForCode(activeRoomCode, activeRoomName);
                     updateRoomHeaderUI();
+                    renameActiveSessionTranscript(activeRoomName);
+                }
+            } else if (data.type === "request_room_info") {
+                if (isHost && conn.open) {
+                    try {
+                        conn.send({
+                            type: "room_info",
+                            roomName: activeRoomName,
+                            roomCode: activeRoomCode
+                        });
+                    } catch (e) {}
                 }
             } else if (data.type === "transcript_state") {
                 if (data.active && !isTranscribing) {
@@ -720,6 +919,7 @@
             if (createErrorEl) createErrorEl.classList.add("hidden");
             activeRoomName = raw;
             activeRoomCode = generateCode();
+            saveRoomNameForCode(activeRoomCode, activeRoomName);
             if (createdRoomNameEl) createdRoomNameEl.textContent = activeRoomName;
             if (createdRoomCodeEl) createdRoomCodeEl.textContent = activeRoomCode;
             createRoomForm.classList.add("hidden");
@@ -803,6 +1003,8 @@
         if (joinErrorEl) joinErrorEl.classList.add("hidden");
         activeRoomCode = code;
         isHost = true;
+        saveRoomNameForCode(activeRoomCode, activeRoomName);
+        prepareSessionTranscript();
 
         try {
             localStream = await initMedia();
@@ -831,22 +1033,32 @@
 
         const hostId = `easythere-huddle-${code.toLowerCase()}-host`;
 
-        peer = new Peer(hostId);
-        peer.on("open", function() {});
-        peer.on("connection", function(conn) {
-            setupDataConnection(conn);
-            conn.on("open", function() {
-                conn.send({
+        function sendHostData(c) {
+            if (!c || !c.open) return;
+            try {
+                c.send({
                     type: "room_info",
                     roomName: activeRoomName,
                     roomCode: activeRoomCode
                 });
                 if (isTranscribing) {
-                    conn.send({
+                    c.send({
                         type: "transcript_state",
                         active: true
                     });
                 }
+            } catch (e) {}
+        }
+
+        peer = new Peer(hostId);
+        peer.on("open", function() {});
+        peer.on("connection", function(conn) {
+            setupDataConnection(conn);
+            if (conn.open) {
+                sendHostData(conn);
+            }
+            conn.on("open", function() {
+                sendHostData(conn);
             });
         });
         peer.on("call", function(incomingCall) {
@@ -894,6 +1106,11 @@
 
         activeRoomCode = code;
         isHost = false;
+        const cachedName = getRoomNameForCode(code);
+        if (cachedName) {
+            activeRoomName = cachedName;
+        }
+        prepareSessionTranscript();
 
         const hostId = `easythere-huddle-${code.toLowerCase()}-host`;
         const guestId = `easythere-huddle-${code.toLowerCase()}-guest-${Math.random().toString(36).substring(2, 7)}`;
@@ -949,6 +1166,10 @@
                     clearTimeout(guestTimeout);
                     guestTimeout = null;
                 }
+
+                try {
+                    conn.send({ type: "request_room_info" });
+                } catch (e) {}
 
                 if (isTranscribing) {
                     conn.send({
