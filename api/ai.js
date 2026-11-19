@@ -176,7 +176,8 @@ CORE CAPABILITIES & RULES:
     "type": "create_project",
     "title": "string",
     "description": "string"
-  }
+  },
+  "chatTitle": "Concise 2 to 5 words topic title for this conversation"
 }
 
 2. ANSWERING QUESTIONS (e.g. "When is the next daily meeting?", "What's on my schedule?", "Do I have any tasks?", "What projects am I working on?"):
@@ -211,6 +212,11 @@ CORE CAPABILITIES & RULES:
 - Answer accurately and concisely based on the transcript's dialogue lines.
 - Reference the transcript title (<roomname>-<date>) and date.
 - Set "action": null.
+
+8. CHAT TITLE GENERATION:
+- In "chatTitle", generate a smart, concise 2 to 5 word topic title that accurately summarizes the topic or intent of the conversation (e.g. "Daily Schedule Check", "Science Fair Tasks", "Lunch Meeting Sync", "Meeting Recap", "Project Setup").
+- Do NOT set "chatTitle" as the user's raw message or conversational filler.
+- Do NOT include quotation marks, brackets, or trailing punctuation in "chatTitle".
 
 Keep "message" concise, authentic, and without conversational filler. Never output markdown code blocks.`;
 

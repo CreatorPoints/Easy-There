@@ -205,6 +205,37 @@ async function fetchProjectsFromCloud() {
     return null;
 }
 
+async function syncChatsToCloud(chats) {
+    const database = getDb();
+    if (!database || !currentUser) return;
+    try {
+        await database.collection("users").doc(currentUser.uid).set({
+            chats: chats,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+    } catch (e) {
+        if (e && (e.code === "unavailable" || String(e).includes("BLOCKED"))) {
+            db = null;
+        }
+    }
+}
+
+async function fetchChatsFromCloud() {
+    const database = getDb();
+    if (!database || !currentUser) return null;
+    try {
+        const doc = await database.collection("users").doc(currentUser.uid).get();
+        if (doc.exists && doc.data().chats) {
+            return doc.data().chats;
+        }
+    } catch (e) {
+        if (e && (e.code === "unavailable" || String(e).includes("BLOCKED"))) {
+            db = null;
+        }
+    }
+    return null;
+}
+
 function parseGoogleEvents(items) {
     const events = {};
     if (!Array.isArray(items)) return events;
@@ -317,6 +348,8 @@ window.EasyThereFirebase = {
     fetchEventsFromCloud: fetchEventsFromCloud,
     syncProjectsToCloud: syncProjectsToCloud,
     fetchProjectsFromCloud: fetchProjectsFromCloud,
+    syncChatsToCloud: syncChatsToCloud,
+    fetchChatsFromCloud: fetchChatsFromCloud,
     connectGoogleCalendar: connectGoogleCalendar,
     refreshGoogleCalendar: refreshGoogleCalendar,
     disconnectGoogleCalendar: disconnectGoogleCalendar,

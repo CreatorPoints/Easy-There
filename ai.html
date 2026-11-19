@@ -57,7 +57,15 @@
                         </div>
                         <p class="subtitle">Intelligent assistant for your schedule, tasks, meetings, and projects.</p>
                     </div>
-                    <button type="button" class="secondary-btn" id="ai-clear-chat-btn">Clear Chat</button>
+                    <div class="ai-header-actions">
+                        <button type="button" class="primary-btn" id="ai-new-chat-btn">+ New Chat</button>
+                        <button type="button" class="secondary-btn ai-chats-toggle-btn" id="ai-toggle-chats-btn" aria-label="Toggle chats drawer">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                            <span>Chats (<span id="ai-chats-count">1</span>)</span>
+                        </button>
+                    </div>
                 </div>
                 <hr>
                 <div class="ai-insights-bar" id="ai-insights-bar">
@@ -82,26 +90,82 @@
                         <span class="ai-insight-val" id="ai-insight-transcripts">0</span>
                     </div>
                 </div>
-                <div class="ai-suggestions-row">
-                    <button type="button" class="ai-suggestion-chip" data-prompt="What's on my schedule today?">What's on my schedule today?</button>
-                    <button type="button" class="ai-suggestion-chip" data-prompt="What tasks are pending?">What tasks are pending?</button>
-                    <button type="button" class="ai-suggestion-chip" data-prompt="What projects am I working on?">What projects am I working on?</button>
-                    <button type="button" class="ai-suggestion-chip" data-prompt="Summarize my latest meeting transcript">Summarize latest meeting</button>
-                    <button type="button" class="ai-suggestion-chip" data-prompt="Schedule lunch tomorrow at 1:00 PM">Schedule lunch tomorrow 1 PM</button>
+                <div class="ai-workspace">
+                    <div class="ai-chats-backdrop" id="ai-chats-backdrop"></div>
+                    <aside class="ai-chats-panel" id="ai-chats-panel">
+                        <div class="ai-chats-panel-header">
+                            <span class="ai-chats-panel-title">Conversations</span>
+                            <div class="ai-chats-panel-actions">
+                                <button type="button" class="icon-button" id="ai-panel-new-chat-btn" aria-label="Create new chat">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                </button>
+                                <button type="button" class="icon-button ai-chats-close-btn" id="ai-chats-panel-close" aria-label="Close conversations list">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="ai-chats-list" id="ai-chats-list"></div>
+                    </aside>
+                    <section class="ai-chat-main">
+                        <div class="ai-active-chat-bar">
+                            <div class="ai-active-title-group" id="ai-active-title-group">
+                                <span class="ai-active-chat-name" id="ai-active-chat-name">New Chat</span>
+                                <button type="button" class="icon-button" id="ai-active-rename-btn" aria-label="Rename active chat">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M12 20h9"></path>
+                                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                                    </svg>
+                                </button>
+                                <button type="button" class="icon-button" id="ai-active-delete-btn" aria-label="Delete active chat">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                            <form class="ai-active-rename-form hidden" id="ai-active-rename-form">
+                                <input type="text" id="ai-active-rename-input" class="ai-rename-input" required autocomplete="off" aria-label="New chat title">
+                                <button type="submit" class="icon-button" aria-label="Save chat title">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </button>
+                                <button type="button" class="icon-button" id="ai-active-rename-cancel" aria-label="Cancel rename">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
+                            </form>
+                        </div>
+                        <div class="ai-suggestions-row" id="ai-suggestions-row">
+                            <button type="button" class="ai-suggestion-chip" data-prompt="What's on my schedule today?">What's on my schedule today?</button>
+                            <button type="button" class="ai-suggestion-chip" data-prompt="What tasks are pending?">What tasks are pending?</button>
+                            <button type="button" class="ai-suggestion-chip" data-prompt="What projects am I working on?">What projects am I working on?</button>
+                            <button type="button" class="ai-suggestion-chip" data-prompt="Summarize my latest meeting transcript">Summarize latest meeting</button>
+                            <button type="button" class="ai-suggestion-chip" data-prompt="Schedule lunch tomorrow at 1:00 PM">Schedule lunch tomorrow 1 PM</button>
+                        </div>
+                        <div class="ai-chat-thread" id="ai-chat-thread"></div>
+                        <form class="ai-chat-form" id="ai-chat-form">
+                            <div class="ai-chat-input-wrapper">
+                                <input type="text" id="ai-chat-input" class="ai-chat-input" required autocomplete="off" aria-label="Ask Easy There AI">
+                                <button type="submit" id="ai-chat-submit" class="ai-chat-submit-btn" aria-label="Send message">
+                                    <svg class="ai-chat-send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                    </svg>
+                                    <div class="ai-spinner hidden" id="ai-chat-spinner"></div>
+                                </button>
+                            </div>
+                        </form>
+                    </section>
                 </div>
-                <div class="ai-chat-thread" id="ai-chat-thread"></div>
-                <form class="ai-chat-form" id="ai-chat-form">
-                    <div class="ai-chat-input-wrapper">
-                        <input type="text" id="ai-chat-input" class="ai-chat-input" required autocomplete="off" aria-label="Ask Easy There AI">
-                        <button type="submit" id="ai-chat-submit" class="ai-chat-submit-btn" aria-label="Send message">
-                            <svg class="ai-chat-send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="22" y1="2" x2="11" y2="13"></line>
-                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                            </svg>
-                            <div class="ai-spinner hidden" id="ai-chat-spinner"></div>
-                        </button>
-                    </div>
-                </form>
             </main>
         </div>
     </div>
