@@ -114,6 +114,36 @@
         }
     }
 
+    function getAiPersonality() {
+        return localStorage.getItem("easy_there_ai_personality") || "helpful";
+    }
+
+    function getAiCustomPersonality() {
+        return localStorage.getItem("easy_there_ai_custom_instructions") || "";
+    }
+
+    function getAiMemories() {
+        try {
+            const raw = localStorage.getItem("easy_there_ai_memories");
+            return raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveAiMemories(memories) {
+        try {
+            localStorage.setItem("easy_there_ai_memories", JSON.stringify(memories));
+        } catch (e) {}
+        if (window.EasyThereFirebase && window.EasyThereFirebase.syncAiSettingsToCloud) {
+            window.EasyThereFirebase.syncAiSettingsToCloud({
+                personality: getAiPersonality(),
+                customPersonality: getAiCustomPersonality(),
+                memories: memories
+            });
+        }
+    }
+
     function showResponse(text, isError) {
         responseEl.textContent = text;
         if (isError) {
@@ -145,7 +175,10 @@
                 todos: getTodos(),
                 projects: getProjects(),
                 transcripts: getTranscripts(),
-                history: conversationHistory.slice(-6)
+                history: conversationHistory.slice(-6),
+                personality: getAiPersonality(),
+                customPersonality: getAiCustomPersonality(),
+                memories: getAiMemories()
             };
 
             const res = await fetch("/api/ai", {
@@ -162,6 +195,26 @@
                 showResponse(data.error || "An error occurred while contacting AI.", true);
                 setLoading(false);
                 return;
+            }
+
+            if (data.newMemory && typeof data.newMemory === "string") {
+                const mems = getAiMemories();
+                const trimmed = data.newMemory.trim();
+                if (trimmed && !mems.includes(trimmed)) {
+                    mems.push(trimmed);
+                    saveAiMemories(mems);
+                }
+            }
+
+            if (data.forgetMemory && typeof data.forgetMemory === "string") {
+                const mems = getAiMemories();
+                const query = data.forgetMemory.trim().toLowerCase();
+                const filtered = mems.filter(function(m) {
+                    return !m.toLowerCase().includes(query);
+                });
+                if (filtered.length !== mems.length) {
+                    saveAiMemories(filtered);
+                }
             }
 
             if (data.action && typeof data.action === "object") {

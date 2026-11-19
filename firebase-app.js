@@ -236,6 +236,37 @@ async function fetchChatsFromCloud() {
     return null;
 }
 
+async function syncAiSettingsToCloud(settings) {
+    const database = getDb();
+    if (!database || !currentUser) return;
+    try {
+        await database.collection("users").doc(currentUser.uid).set({
+            aiSettings: settings,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+    } catch (e) {
+        if (e && (e.code === "unavailable" || String(e).includes("BLOCKED"))) {
+            db = null;
+        }
+    }
+}
+
+async function fetchAiSettingsFromCloud() {
+    const database = getDb();
+    if (!database || !currentUser) return null;
+    try {
+        const doc = await database.collection("users").doc(currentUser.uid).get();
+        if (doc.exists && doc.data().aiSettings) {
+            return doc.data().aiSettings;
+        }
+    } catch (e) {
+        if (e && (e.code === "unavailable" || String(e).includes("BLOCKED"))) {
+            db = null;
+        }
+    }
+    return null;
+}
+
 function parseGoogleEvents(items) {
     const events = {};
     if (!Array.isArray(items)) return events;
@@ -350,6 +381,8 @@ window.EasyThereFirebase = {
     fetchProjectsFromCloud: fetchProjectsFromCloud,
     syncChatsToCloud: syncChatsToCloud,
     fetchChatsFromCloud: fetchChatsFromCloud,
+    syncAiSettingsToCloud: syncAiSettingsToCloud,
+    fetchAiSettingsFromCloud: fetchAiSettingsFromCloud,
     connectGoogleCalendar: connectGoogleCalendar,
     refreshGoogleCalendar: refreshGoogleCalendar,
     disconnectGoogleCalendar: disconnectGoogleCalendar,

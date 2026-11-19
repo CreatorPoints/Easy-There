@@ -22,14 +22,20 @@ module.exports = async function handler(req, res) {
         todos,
         projects,
         transcripts,
-        history
+        history,
+        personality,
+        customPersonality,
+        memories,
+        file
     } = req.body || {};
 
-    if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
-        return res.status(400).json({ error: 'Prompt is required' });
+    if ((!prompt || typeof prompt !== 'string' || !prompt.trim()) && (!file || typeof file !== 'object')) {
+        return res.status(400).json({ error: 'Prompt or file is required' });
     }
 
-    const sanitizedPrompt = prompt.trim().slice(0, 500);
+    const sanitizedPrompt = (prompt && typeof prompt === 'string')
+        ? prompt.trim().slice(0, 1000)
+        : (file && file.name ? `Analyze the attached file ${file.name}` : '');
 
     function formatSchedule(todayStr, manual, gcal) {
         const combined = {};
@@ -131,13 +137,38 @@ module.exports = async function handler(req, res) {
         }).join('\n');
     }
 
+    function formatMemories(list) {
+        if (!Array.isArray(list) || list.length === 0) {
+            return 'No memories recorded yet.';
+        }
+        return list.slice(0, 50).map((m, idx) => `${idx + 1}. ${String(m).slice(0, 300)}`).join('\n');
+    }
+
+    let personalityInstruction = 'Be helpful, structured, and clear while remaining authentic.';
+    if (personality === 'concise') {
+        personalityInstruction = 'Be extremely concise, direct, and terse. Answer immediately with minimal words, zero conversational filler, and no unnecessary pleasantries.';
+    } else if (personality === 'technical') {
+        personalityInstruction = 'Be technically precise, analytical, and structured. Emphasize engineering accuracy, exact technical details, and code or data correctness.';
+    } else if (personality === 'casual') {
+        personalityInstruction = 'Be friendly, casual, and relaxed, like an approachable and supportive peer or teammate.';
+    } else if (personality === 'custom' && customPersonality) {
+        personalityInstruction = `Follow the user's custom personality instructions strictly: ${String(customPersonality).slice(0, 500)}`;
+    }
+    if (personality !== 'custom' && customPersonality && typeof customPersonality === 'string' && customPersonality.trim()) {
+        personalityInstruction += `\nAdditional user personality guidance: ${customPersonality.trim().slice(0, 300)}`;
+    }
+
     const todayVal = currentDate || new Date().toISOString().slice(0, 10);
     const scheduleText = formatSchedule(todayVal, calendarEvents, gcalEvents);
     const todosText = formatTodos(todos);
     const projectsText = formatProjects(projects);
     const transcriptsText = formatTranscripts(transcripts);
+    const memoriesText = formatMemories(memories);
 
     const systemPrompt = `You are Easy There AI, the intelligent personal assistant built directly into the user's planner app.
+
+PERSONALITY & TONE:
+${personalityInstruction}
 
 TEMPORAL CONTEXT:
 - Current Date: ${todayVal} (${currentDayOfWeek || ''})
@@ -145,6 +176,9 @@ TEMPORAL CONTEXT:
 - User Timezone: ${timezone || 'UTC'}
 - Active Page: ${currentPage || 'Planner'}
 ${selectedDate ? `- Selected Date in Calendar View: ${selectedDate}` : ''}
+
+USER'S SAVED MEMORIES & PREFERENCES (LONG-TERM MEMORY):
+${memoriesText}
 
 USER'S SCHEDULE (ALL CALENDAR & GCAL EVENTS):
 ${scheduleText}
@@ -177,14 +211,17 @@ CORE CAPABILITIES & RULES:
     "title": "string",
     "description": "string"
   },
-  "chatTitle": "Concise 2 to 5 words topic title for this conversation"
+  "chatTitle": "Concise 2 to 5 words topic title for this conversation",
+  "newMemory": null | "string",
+  "forgetMemory": null | "string"
 }
 
-2. ANSWERING QUESTIONS (e.g. "When is the next daily meeting?", "What's on my schedule?", "Do I have any tasks?", "What projects am I working on?"):
+2. ANSWERING QUESTIONS (e.g. "When is the next daily meeting?", "What's on my schedule?", "Do I have any tasks?", "What projects am I working on?", "What do you remember about me?"):
 - When the user asks "When is the next [X]?", search the schedule chronologically starting from the current date and current time.
 - If an event is scheduled today but its time has already passed relative to Current Time, find the next upcoming occurrence on future dates.
 - Answer clearly stating the event title, date, day of week, and time.
 - Answer questions about projects, their tasks, and progress directly.
+- When asked what you remember about the user, summarize the saved memories accurately.
 - Set "action": null.
 
 3. CONVERSATIONAL CONTEXT & PRONOUNS:
@@ -218,6 +255,17 @@ CORE CAPABILITIES & RULES:
 - Do NOT set "chatTitle" as the user's raw message or conversational filler.
 - Do NOT include quotation marks, brackets, or trailing punctuation in "chatTitle".
 
+9. LONG-TERM MEMORY:
+- You have access to user memories under 'USER'S SAVED MEMORIES & PREFERENCES'.
+- Respect and apply them across conversations.
+- When the user explicitly asks to remember something (e.g. "remember that I prefer X", "note down that my cat's name is Y") OR reveals an important personal fact, work habit, or preference worth remembering:
+  Set "newMemory" to a concise summary of the fact (e.g. "Prefers morning meetings before 11 AM").
+- If the user asks to forget something (e.g. "forget that I live in X"), set "forgetMemory" to the key phrase or memory text to remove.
+- Otherwise set "newMemory": null and "forgetMemory": null.
+
+10. ATTACHED FILES:
+- If a file is attached, inspect its contents or metadata and answer questions, provide analysis, code reviews, summaries, or insights as requested.
+
 Keep "message" concise, authentic, and without conversational filler. Never output markdown code blocks.`;
 
     const messages = [{ role: 'system', content: systemPrompt }];
@@ -230,7 +278,26 @@ Keep "message" concise, authentic, and without conversational filler. Never outp
         });
     }
 
-    messages.push({ role: 'user', content: sanitizedPrompt });
+    if (file && typeof file === 'object') {
+        if (file.isImage && typeof file.content === 'string' && file.content.startsWith('data:image/')) {
+            messages.push({
+                role: 'user',
+                content: [
+                    { type: 'text', text: sanitizedPrompt || 'Analyze this image.' },
+                    { type: 'image_url', image_url: { url: file.content } }
+                ]
+            });
+        } else if (typeof file.content === 'string' && file.content.trim()) {
+            const safeContent = file.content.slice(0, 25000);
+            const filePrompt = `${sanitizedPrompt}\n\n[ATTACHED FILE: ${file.name || 'file'} (${file.type || 'text'}, ${file.size || safeContent.length} bytes)]\n\`\`\`\n${safeContent}\n\`\`\``;
+            messages.push({ role: 'user', content: filePrompt });
+        } else {
+            const filePrompt = `${sanitizedPrompt}\n\n[ATTACHED FILE METADATA: ${file.name || 'file'} (${file.type || 'binary'}, ${file.size || 0} bytes)]`;
+            messages.push({ role: 'user', content: filePrompt });
+        }
+    } else {
+        messages.push({ role: 'user', content: sanitizedPrompt });
+    }
 
     try {
         const response = await fetch('https://ai.hackclub.com/proxy/v1/chat/completions', {
@@ -243,7 +310,7 @@ Keep "message" concise, authentic, and without conversational filler. Never outp
                 model: 'google/gemini-2.5-flash',
                 response_format: { type: 'json_object' },
                 messages: messages,
-                max_tokens: 600,
+                max_tokens: 800,
                 temperature: 0.2
             })
         });

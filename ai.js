@@ -2,6 +2,9 @@
     const CHATS_STORAGE_KEY = "easy_there_ai_chats";
     const ACTIVE_CHAT_KEY = "easy_there_ai_active_chat_id";
     const LEGACY_STORAGE_KEY = "easy_there_ai_chat_thread";
+    const PERSONALITY_STORAGE_KEY = "easy_there_ai_personality";
+    const CUSTOM_PERSONALITY_KEY = "easy_there_ai_custom_instructions";
+    const MEMORIES_STORAGE_KEY = "easy_there_ai_memories";
 
     const chatsListEl = document.getElementById("ai-chats-list");
     const chatsCountEl = document.getElementById("ai-chats-count");
@@ -20,6 +23,22 @@
     const activeRenameInput = document.getElementById("ai-active-rename-input");
     const activeRenameCancel = document.getElementById("ai-active-rename-cancel");
 
+    const settingsBtn = document.getElementById("ai-settings-btn");
+    const settingsModal = document.getElementById("ai-settings-modal");
+    const settingsOverlay = document.getElementById("ai-settings-overlay");
+    const settingsCloseBtn = document.getElementById("ai-settings-close-btn");
+    const settingsSaveBtn = document.getElementById("ai-settings-save-btn");
+    const personalityBtns = document.querySelectorAll(".ai-personality-btn");
+    const customPersonalityInput = document.getElementById("ai-custom-personality-input");
+    const memoriesListEl = document.getElementById("ai-memories-list");
+    const memoriesCountBadge = document.getElementById("ai-memories-count-badge");
+    const addMemoryForm = document.getElementById("ai-add-memory-form");
+    const memoryInputEl = document.getElementById("ai-memory-input");
+
+    const attachBtn = document.getElementById("ai-attach-btn");
+    const fileInput = document.getElementById("ai-file-input");
+    const attachedPreviewEl = document.getElementById("ai-attached-file-preview");
+
     const suggestionsRow = document.getElementById("ai-suggestions-row");
     const threadEl = document.getElementById("ai-chat-thread");
     const formEl = document.getElementById("ai-chat-form");
@@ -33,9 +52,15 @@
     const insightEvents = document.getElementById("ai-insight-events");
     const insightProjects = document.getElementById("ai-insight-projects");
     const insightTranscripts = document.getElementById("ai-insight-transcripts");
+    const insightMemories = document.getElementById("ai-insight-memories");
+    const insightMemoriesPill = document.getElementById("ai-insight-memories-pill");
 
     let chats = loadChats();
     let activeChatId = getInitialActiveChatId();
+    let personality = loadPersonality();
+    let customPersonality = loadCustomPersonality();
+    let memories = loadMemories();
+    let attachedFile = null;
 
     function escapeHtml(str) {
         if (!str) return "";
@@ -120,6 +145,49 @@
         }
     }
 
+    function loadPersonality() {
+        return localStorage.getItem(PERSONALITY_STORAGE_KEY) || "helpful";
+    }
+
+    function loadCustomPersonality() {
+        return localStorage.getItem(CUSTOM_PERSONALITY_KEY) || "";
+    }
+
+    function loadMemories() {
+        try {
+            const raw = localStorage.getItem(MEMORIES_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveMemories() {
+        try {
+            localStorage.setItem(MEMORIES_STORAGE_KEY, JSON.stringify(memories));
+        } catch (e) {}
+        saveSettingsToCloud();
+    }
+
+    function savePersonality() {
+        try {
+            localStorage.setItem(PERSONALITY_STORAGE_KEY, personality);
+            localStorage.setItem(CUSTOM_PERSONALITY_KEY, customPersonality);
+        } catch (e) {}
+        saveSettingsToCloud();
+    }
+
+    function saveSettingsToCloud() {
+        if (window.EasyThereFirebase && window.EasyThereFirebase.syncAiSettingsToCloud) {
+            window.EasyThereFirebase.syncAiSettingsToCloud({
+                personality: personality,
+                customPersonality: customPersonality,
+                memories: memories
+            });
+        }
+    }
+
     function updateInsights() {
         const todayStr = getTodayString();
         if (insightToday) insightToday.textContent = todayStr;
@@ -139,6 +207,9 @@
 
         const trans = getTranscripts();
         if (insightTranscripts) insightTranscripts.textContent = trans.length;
+
+        if (insightMemories) insightMemories.textContent = memories.length;
+        if (memoriesCountBadge) memoriesCountBadge.textContent = memories.length;
     }
 
     function createWelcomeMessage() {
@@ -445,10 +516,52 @@
             const bubbleWrap = document.createElement("div");
             bubbleWrap.className = "ai-bubble-wrap";
 
-            const bubble = document.createElement("div");
-            bubble.className = "ai-chat-bubble";
-            bubble.textContent = msg.content;
-            bubbleWrap.appendChild(bubble);
+            if (msg.file) {
+                const fileCard = document.createElement("div");
+                fileCard.className = "ai-chat-file-card";
+
+                if (msg.file.isImage && msg.file.thumbnail) {
+                    const thumb = document.createElement("img");
+                    thumb.className = "ai-chat-file-thumb";
+                    thumb.src = msg.file.thumbnail;
+                    thumb.alt = msg.file.name || "Attached image";
+                    fileCard.appendChild(thumb);
+                } else {
+                    const fileIcon = document.createElement("span");
+                    fileIcon.className = "ai-chat-file-icon";
+                    fileIcon.innerHTML = `
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                    `;
+                    fileCard.appendChild(fileIcon);
+                }
+
+                const fileMeta = document.createElement("div");
+                fileMeta.className = "ai-chat-file-meta";
+
+                const fileName = document.createElement("span");
+                fileName.className = "ai-chat-file-name";
+                fileName.textContent = msg.file.name || "Attached File";
+
+                const fileSize = document.createElement("span");
+                fileSize.className = "ai-chat-file-size";
+                fileSize.textContent = formatBytes(msg.file.size);
+
+                fileMeta.appendChild(fileName);
+                fileMeta.appendChild(fileSize);
+                fileCard.appendChild(fileMeta);
+
+                bubbleWrap.appendChild(fileCard);
+            }
+
+            if (msg.content) {
+                const bubble = document.createElement("div");
+                bubble.className = "ai-chat-bubble";
+                bubble.textContent = msg.content;
+                bubbleWrap.appendChild(bubble);
+            }
 
             if (msg.actionInfo) {
                 const badge = document.createElement("div");
@@ -460,6 +573,18 @@
                     <span>${escapeHtml(msg.actionInfo)}</span>
                 `;
                 bubbleWrap.appendChild(badge);
+            }
+
+            if (msg.memoryInfo) {
+                const memBadge = document.createElement("div");
+                memBadge.className = "ai-action-badge ai-memory-badge";
+                memBadge.innerHTML = `
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"/>
+                    </svg>
+                    <span>${escapeHtml(msg.memoryInfo)}</span>
+                `;
+                bubbleWrap.appendChild(memBadge);
             }
 
             if (msg.time) {
@@ -503,18 +628,271 @@
         return cleaned;
     }
 
+    function formatBytes(bytes) {
+        if (!bytes || bytes <= 0) return "0 B";
+        const k = 1024;
+        const sizes = ["B", "KB", "MB", "GB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+    }
+
+    function createThumbnail(dataUrl) {
+        return new Promise(function(resolve) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement("canvas");
+                let w = img.width;
+                let h = img.height;
+                const maxDim = 120;
+                if (w > maxDim || h > maxDim) {
+                    const ratio = Math.min(maxDim / w, maxDim / h);
+                    w = Math.round(w * ratio);
+                    h = Math.round(h * ratio);
+                }
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext("2d");
+                ctx.drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL("image/jpeg", 0.7));
+            };
+            img.onerror = function() {
+                resolve(null);
+            };
+            img.src = dataUrl;
+        });
+    }
+
+    function downscaleImageForUpload(dataUrl) {
+        return new Promise(function(resolve) {
+            const img = new Image();
+            img.onload = function() {
+                const maxDim = 1200;
+                if (img.width <= maxDim && img.height <= maxDim) {
+                    resolve(dataUrl);
+                    return;
+                }
+                const canvas = document.createElement("canvas");
+                const ratio = Math.min(maxDim / img.width, maxDim / img.height);
+                canvas.width = Math.round(img.width * ratio);
+                canvas.height = Math.round(img.height * ratio);
+                const ctx = canvas.getContext("2d");
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL("image/jpeg", 0.82));
+            };
+            img.onerror = function() {
+                resolve(dataUrl);
+            };
+            img.src = dataUrl;
+        });
+    }
+
+    async function processFile(file) {
+        if (!file) return;
+        const isImage = file.type.startsWith("image/");
+        if (isImage) {
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const rawDataUrl = e.target.result;
+                const [thumb, uploadUrl] = await Promise.all([
+                    createThumbnail(rawDataUrl),
+                    downscaleImageForUpload(rawDataUrl)
+                ]);
+                attachedFile = {
+                    name: file.name,
+                    size: file.size,
+                    type: file.type,
+                    isImage: true,
+                    content: uploadUrl,
+                    thumbnail: thumb
+                };
+                renderAttachedFilePreview();
+                if (inputEl) inputEl.focus();
+            };
+            reader.readAsDataURL(file);
+        } else {
+            const isTextLikely = file.type.startsWith("text/") ||
+                file.type.includes("json") ||
+                file.type.includes("javascript") ||
+                file.type.includes("xml") ||
+                /\.(txt|md|js|ts|jsx|tsx|py|html|css|json|csv|xml|log|yaml|yml|sh|env|sql|c|cpp|h|java|rb|go|rs|php)$/i.test(file.name);
+
+            if (isTextLikely) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    attachedFile = {
+                        name: file.name,
+                        size: file.size,
+                        type: file.type || "text/plain",
+                        isImage: false,
+                        content: String(e.target.result).slice(0, 25000),
+                        thumbnail: null
+                    };
+                    renderAttachedFilePreview();
+                    if (inputEl) inputEl.focus();
+                };
+                reader.readAsText(file);
+            } else {
+                attachedFile = {
+                    name: file.name,
+                    size: file.size,
+                    type: file.type || "application/octet-stream",
+                    isImage: false,
+                    content: "",
+                    thumbnail: null
+                };
+                renderAttachedFilePreview();
+                if (inputEl) inputEl.focus();
+            }
+        }
+    }
+
+    function renderAttachedFilePreview() {
+        if (!attachedPreviewEl) return;
+        if (!attachedFile) {
+            attachedPreviewEl.classList.add("hidden");
+            attachedPreviewEl.innerHTML = "";
+            return;
+        }
+
+        attachedPreviewEl.classList.remove("hidden");
+        attachedPreviewEl.innerHTML = `
+            <div class="ai-attached-info">
+                ${attachedFile.thumbnail
+                    ? `<img src="${attachedFile.thumbnail}" class="ai-attached-thumb" alt="${escapeHtml(attachedFile.name)}">`
+                    : `<svg class="ai-attached-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                       </svg>`
+                }
+                <span class="ai-attached-name">${escapeHtml(attachedFile.name)}</span>
+                <span class="ai-attached-size">${formatBytes(attachedFile.size)}</span>
+            </div>
+            <button type="button" class="icon-button ai-attached-remove-btn" id="ai-attached-remove-btn" aria-label="Remove attached file">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        `;
+
+        const removeBtn = document.getElementById("ai-attached-remove-btn");
+        if (removeBtn) {
+            removeBtn.addEventListener("click", function() {
+                attachedFile = null;
+                if (fileInput) fileInput.value = "";
+                renderAttachedFilePreview();
+            });
+        }
+    }
+
+    function openSettingsModal() {
+        renderPersonalitySelection();
+        renderMemoriesList();
+        if (settingsModal) settingsModal.classList.remove("hidden");
+    }
+
+    function closeSettingsModal() {
+        if (customPersonalityInput) {
+            customPersonality = customPersonalityInput.value.trim();
+            savePersonality();
+        }
+        if (settingsModal) settingsModal.classList.add("hidden");
+    }
+
+    function selectPersonality(p) {
+        personality = p || "helpful";
+        savePersonality();
+        renderPersonalitySelection();
+    }
+
+    function renderPersonalitySelection() {
+        personalityBtns.forEach(function(btn) {
+            if (btn.dataset.personality === personality) {
+                btn.classList.add("active");
+            } else {
+                btn.classList.remove("active");
+            }
+        });
+        if (customPersonalityInput) {
+            customPersonalityInput.value = customPersonality;
+        }
+    }
+
+    function renderMemoriesList() {
+        if (!memoriesListEl) return;
+        if (memoriesCountBadge) {
+            memoriesCountBadge.textContent = memories.length;
+        }
+        if (insightMemories) {
+            insightMemories.textContent = memories.length;
+        }
+
+        memoriesListEl.innerHTML = "";
+
+        if (memories.length === 0) {
+            const empty = document.createElement("div");
+            empty.className = "ai-memories-empty";
+            empty.textContent = "No memories saved yet. Add one above or tell the AI to remember things in chat.";
+            memoriesListEl.appendChild(empty);
+            return;
+        }
+
+        memories.forEach(function(mem, idx) {
+            const item = document.createElement("div");
+            item.className = "ai-memory-item";
+
+            const textSpan = document.createElement("span");
+            textSpan.className = "ai-memory-item-text";
+            textSpan.textContent = mem;
+
+            const delBtn = document.createElement("button");
+            delBtn.type = "button";
+            delBtn.className = "ai-memory-delete-btn";
+            delBtn.setAttribute("aria-label", "Delete memory");
+            delBtn.innerHTML = `
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            `;
+
+            delBtn.addEventListener("click", function() {
+                memories.splice(idx, 1);
+                saveMemories();
+                renderMemoriesList();
+                updateInsights();
+            });
+
+            item.appendChild(textSpan);
+            item.appendChild(delBtn);
+            memoriesListEl.appendChild(item);
+        });
+    }
+
     async function handleUserPrompt(promptText) {
         const text = promptText ? promptText.trim() : "";
-        if (!text) return;
+        if (!text && !attachedFile) return;
 
         const active = getActiveChat();
         if (!active) return;
 
+        const fileToSend = attachedFile;
+        attachedFile = null;
+        if (fileInput) fileInput.value = "";
+        renderAttachedFilePreview();
+
         const userMsg = {
             role: "user",
-            content: text,
+            content: text || (fileToSend ? `Attached file: ${fileToSend.name}` : ""),
             time: getCurrentTime(),
-            action: null
+            action: null,
+            file: fileToSend ? {
+                name: fileToSend.name,
+                size: fileToSend.size,
+                type: fileToSend.type,
+                isImage: fileToSend.isImage,
+                thumbnail: fileToSend.thumbnail
+            } : null
         };
 
         if (!Array.isArray(active.messages)) {
@@ -549,7 +927,17 @@
                 todos: getTodos(),
                 projects: getProjects(),
                 transcripts: getTranscripts(),
-                history: historySlice
+                history: historySlice,
+                personality: personality,
+                customPersonality: customPersonality,
+                memories: memories,
+                file: fileToSend ? {
+                    name: fileToSend.name,
+                    size: fileToSend.size,
+                    type: fileToSend.type,
+                    isImage: fileToSend.isImage,
+                    content: fileToSend.content
+                } : null
             };
 
             const res = await fetch("/api/ai", {
@@ -630,13 +1018,41 @@
                 }
             }
 
+            let memoryBadgeText = null;
+
+            if (data.newMemory && typeof data.newMemory === "string") {
+                const cleanMemory = data.newMemory.trim();
+                if (cleanMemory && !memories.includes(cleanMemory)) {
+                    memories.push(cleanMemory);
+                    saveMemories();
+                    renderMemoriesList();
+                    updateInsights();
+                    memoryBadgeText = `Remembered: "${cleanMemory}"`;
+                }
+            }
+
+            if (data.forgetMemory && typeof data.forgetMemory === "string") {
+                const query = data.forgetMemory.trim().toLowerCase();
+                const prevCount = memories.length;
+                memories = memories.filter(function(m) {
+                    return !m.toLowerCase().includes(query);
+                });
+                if (memories.length !== prevCount) {
+                    saveMemories();
+                    renderMemoriesList();
+                    updateInsights();
+                    memoryBadgeText = `Forgot: "${data.forgetMemory.trim()}"`;
+                }
+            }
+
             const replyMessage = data.message || "Done.";
 
             active.messages.push({
                 role: "assistant",
                 content: replyMessage,
                 time: getCurrentTime(),
-                actionInfo: actionBadgeText
+                actionInfo: actionBadgeText,
+                memoryInfo: memoryBadgeText
             });
 
             if (!active.isTitleCustom && data.chatTitle) {
@@ -717,6 +1133,91 @@
         });
     }
 
+    if (settingsBtn) {
+        settingsBtn.addEventListener("click", openSettingsModal);
+    }
+
+    if (insightMemoriesPill) {
+        insightMemoriesPill.addEventListener("click", openSettingsModal);
+    }
+
+    if (settingsCloseBtn) {
+        settingsCloseBtn.addEventListener("click", closeSettingsModal);
+    }
+
+    if (settingsOverlay) {
+        settingsOverlay.addEventListener("click", closeSettingsModal);
+    }
+
+    if (settingsSaveBtn) {
+        settingsSaveBtn.addEventListener("click", closeSettingsModal);
+    }
+
+    personalityBtns.forEach(function(btn) {
+        btn.addEventListener("click", function() {
+            selectPersonality(btn.dataset.personality);
+        });
+    });
+
+    if (customPersonalityInput) {
+        customPersonalityInput.addEventListener("input", function() {
+            customPersonality = customPersonalityInput.value;
+            try {
+                localStorage.setItem(CUSTOM_PERSONALITY_KEY, customPersonality);
+            } catch (e) {}
+            saveSettingsToCloud();
+        });
+    }
+
+    if (addMemoryForm && memoryInputEl) {
+        addMemoryForm.addEventListener("submit", function(e) {
+            e.preventDefault();
+            const text = memoryInputEl.value.trim();
+            if (text && !memories.includes(text)) {
+                memories.push(text);
+                memoryInputEl.value = "";
+                saveMemories();
+                renderMemoriesList();
+                updateInsights();
+            }
+        });
+    }
+
+    if (attachBtn && fileInput) {
+        attachBtn.addEventListener("click", function() {
+            fileInput.click();
+        });
+    }
+
+    if (fileInput) {
+        fileInput.addEventListener("change", function(e) {
+            const file = e.target.files && e.target.files[0];
+            if (file) {
+                processFile(file);
+            }
+        });
+    }
+
+    const chatMainSection = document.querySelector(".ai-chat-main");
+    if (chatMainSection) {
+        chatMainSection.addEventListener("dragover", function(e) {
+            e.preventDefault();
+            chatMainSection.classList.add("drag-over");
+        });
+        chatMainSection.addEventListener("dragleave", function(e) {
+            e.preventDefault();
+            chatMainSection.classList.remove("drag-over");
+        });
+        chatMainSection.addEventListener("drop", function(e) {
+            e.preventDefault();
+            chatMainSection.classList.remove("drag-over");
+            const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (file) {
+                processFile(file);
+            }
+        });
+    }
+
     if (formEl) {
         formEl.addEventListener("submit", function(e) {
             e.preventDefault();
@@ -740,12 +1241,40 @@
         if (e.key === "Escape") {
             closeActiveRename();
             closeMobileChatsPanel();
+            closeSettingsModal();
         }
     });
 
     if (window.EasyThereFirebase) {
         window.EasyThereFirebase.onUserChanged(async function(user) {
             if (user) {
+                const cloudSettings = await window.EasyThereFirebase.fetchAiSettingsFromCloud();
+                if (cloudSettings && typeof cloudSettings === "object") {
+                    if (cloudSettings.personality) {
+                        personality = cloudSettings.personality;
+                        try {
+                            localStorage.setItem(PERSONALITY_STORAGE_KEY, personality);
+                        } catch (e) {}
+                    }
+                    if (cloudSettings.customPersonality !== undefined) {
+                        customPersonality = cloudSettings.customPersonality;
+                        try {
+                            localStorage.setItem(CUSTOM_PERSONALITY_KEY, customPersonality);
+                        } catch (e) {}
+                    }
+                    if (Array.isArray(cloudSettings.memories)) {
+                        memories = cloudSettings.memories;
+                        try {
+                            localStorage.setItem(MEMORIES_STORAGE_KEY, JSON.stringify(memories));
+                        } catch (e) {}
+                    }
+                    renderPersonalitySelection();
+                    renderMemoriesList();
+                    updateInsights();
+                } else if (memories.length > 0 || personality !== "helpful" || customPersonality) {
+                    saveSettingsToCloud();
+                }
+
                 const cloudChats = await window.EasyThereFirebase.fetchChatsFromCloud();
                 if (cloudChats && Array.isArray(cloudChats) && cloudChats.length > 0) {
                     chats = cloudChats;
@@ -765,6 +1294,9 @@
         });
     }
 
+    renderPersonalitySelection();
+    renderMemoriesList();
+    renderAttachedFilePreview();
     updateInsights();
     renderChatsList();
     renderActiveChat();
