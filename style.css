@@ -1889,8 +1889,10 @@ h2 {
 }
 
 
+.container.projects-container,
 .projects-container {
-    max-width: 780px;
+    width: 100%;
+    max-width: 1200px;
 }
 
 .projects-header-row {
@@ -2270,13 +2272,16 @@ h2 {
     background-color: #121212;
 }
 
+.container.ai-page-container,
 .ai-page-container {
-    max-width: 1040px;
+    width: 100%;
+    max-width: 100%;
     display: flex;
     flex-direction: column;
     height: calc(100vh - 65px);
-    padding: 24px 24px 16px 24px;
+    padding: 20px 32px 16px 32px;
     box-sizing: border-box;
+    margin: 0;
 }
 
 .ai-header-row {
@@ -2343,6 +2348,7 @@ h2 {
     min-height: 0;
     position: relative;
     overflow: hidden;
+    width: 100%;
 }
 
 .ai-chats-backdrop {
@@ -2350,7 +2356,7 @@ h2 {
 }
 
 .ai-chats-panel {
-    width: 240px;
+    width: 260px;
     flex-shrink: 0;
     background-color: #060606;
     border: 1px solid #1a1a1a;
@@ -2492,7 +2498,7 @@ h2 {
     background-color: #060606;
     border: 1px solid #1a1a1a;
     border-radius: 10px;
-    padding: 14px 16px;
+    padding: 16px 20px;
     overflow: hidden;
 }
 
@@ -2589,7 +2595,7 @@ h2 {
 .ai-chat-message {
     display: flex;
     gap: 10px;
-    max-width: 82%;
+    max-width: 85%;
 }
 
 .ai-chat-message.assistant-message {
