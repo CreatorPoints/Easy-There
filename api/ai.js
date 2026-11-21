@@ -97,137 +97,108 @@ module.exports = async function handler(req, res) {
         return results;
     }
 
+    const isMeetingQuery = /(\btranscript\b|\bmeeting\b|\bcall\b|\brecap\b|\bconference\b|\bdiscussed\b|\btalked about\b)/i.test(sanitizedPrompt);
+
     function formatSchedule(todayStr, manual, gcal) {
         const combined = {};
+        const todayDate = new Date(todayStr || Date.now());
+        const pastCutoff = new Date(todayDate);
+        pastCutoff.setDate(pastCutoff.getDate() - 2);
+        const futureCutoff = new Date(todayDate);
+        futureCutoff.setDate(futureCutoff.getDate() + 30);
 
-        for (const [date, list] of Object.entries(manual || {})) {
-            if (!combined[date]) combined[date] = [];
-            if (Array.isArray(list)) {
-                list.forEach(item => {
-                    const title = typeof item === 'string' ? item : (item.title || item.text || 'Untitled');
-                    const time = typeof item === 'string' ? 'All Day' : (item.time || 'All Day');
-                    combined[date].push({ title, time, source: 'Manual Event' });
-                });
-            }
-        }
+        const pastIso = pastCutoff.toISOString().slice(0, 10);
+        const futureIso = futureCutoff.toISOString().slice(0, 10);
 
-        for (const [date, list] of Object.entries(gcal || {})) {
-            if (!combined[date]) combined[date] = [];
-            if (Array.isArray(list)) {
-                list.forEach(item => {
-                    combined[date].push({
-                        title: item.title || 'Busy',
-                        time: item.time || 'All Day',
-                        source: 'Google Calendar'
+        function addEvents(sourceMap, sourceName) {
+            for (const [date, list] of Object.entries(sourceMap || {})) {
+                if (date < pastIso || date > futureIso) continue;
+                if (!combined[date]) combined[date] = [];
+                if (Array.isArray(list)) {
+                    list.forEach(item => {
+                        const title = typeof item === 'string' ? item : (item.title || item.text || 'Event');
+                        const time = typeof item === 'string' ? 'All Day' : (item.time || 'All Day');
+                        combined[date].push(`[${time}] ${title} (${sourceName})`);
                     });
-                });
+                }
             }
         }
+
+        addEvents(manual, 'Manual');
+        addEvents(gcal, 'GCal');
 
         const sortedDates = Object.keys(combined).sort();
-        if (sortedDates.length === 0) {
-            return 'No events currently scheduled.';
-        }
+        if (sortedDates.length === 0) return 'No events in upcoming 30 days.';
 
-        const lines = [];
-        sortedDates.forEach(date => {
-            let label = date;
-            if (date === todayStr) label = `${date} (TODAY)`;
-            lines.push(`Date: ${label}`);
-            combined[date].forEach(ev => {
-                lines.push(`  - [${ev.time}] ${ev.title} (${ev.source})`);
-            });
-        });
-
-        return lines.join('\n');
-    }
-
-    function formatTodos(list) {
-        if (!Array.isArray(list) || list.length === 0) {
-            return 'No to-dos currently.';
-        }
-        return list.map((item, idx) => {
-            const text = typeof item === 'string' ? item : (item.text || '');
-            const status = typeof item === 'object' && item.completed ? '[Completed]' : '[Pending]';
-            return `${idx + 1}. ${status} ${text}`;
+        return sortedDates.map(d => {
+            const tag = d === todayStr ? `${d} (TODAY)` : d;
+            return `${tag}: ${combined[d].join('; ')}`;
         }).join('\n');
     }
 
+    function formatTodos(list) {
+        if (!Array.isArray(list) || list.length === 0) return 'None.';
+        return list.slice(0, 20).map(item => {
+            const text = typeof item === 'string' ? item : (item.text || '');
+            const st = typeof item === 'object' && item.completed ? '[x]' : '[ ]';
+            return `${st} ${text}`;
+        }).join('; ');
+    }
+
     function formatTranscripts(list) {
-        if (!Array.isArray(list) || list.length === 0) {
-            return 'No conference or meeting transcripts saved.';
+        if (!Array.isArray(list) || list.length === 0) return 'None.';
+        if (!isMeetingQuery) {
+            return list.slice(0, 5).map(t => `${t.name || t.roomName || 'Meeting'} (${t.date || ''})`).join(', ');
         }
-        const entries = [];
-        list.slice(0, 10).forEach((t, i) => {
-            const name = t.name || `${t.roomName || 'Meeting'}-${t.date || 'Unknown'}`;
-            const date = t.date || 'Unknown Date';
-            let linesText = '';
-            if (Array.isArray(t.lines)) {
-                linesText = t.lines.slice(0, 30).map(l => `  [${l.time || ''}] ${l.speaker || 'Speaker'}: ${l.text || ''}`).join('\n');
-                if (t.lines.length > 30) {
-                    linesText += `\n  ... (${t.lines.length - 30} more lines)`;
-                }
-            } else if (t.fullText) {
-                linesText = t.fullText.slice(0, 1500);
-            } else {
-                linesText = 'No dialogue recorded.';
-            }
-            entries.push(`Transcript #${i + 1}: ${name} (${date})\n${linesText}`);
-        });
-        return entries.join('\n\n');
+        return list.slice(0, 3).map(t => {
+            const name = t.name || `${t.roomName || 'Meeting'}-${t.date || ''}`;
+            const lines = Array.isArray(t.lines)
+                ? t.lines.slice(0, 25).map(l => `${l.speaker || 'Speaker'}: ${l.text || ''}`).join(' | ')
+                : (t.fullText ? t.fullText.slice(0, 800) : 'No lines recorded');
+            return `${name}: ${lines}`;
+        }).join('\n');
     }
 
     function formatProjects(list) {
-        if (!Array.isArray(list) || list.length === 0) {
-            return 'No projects currently.';
-        }
-        return list.map((p, idx) => {
-            const title = p.title || p.name || 'Untitled Project';
-            const desc = p.description ? ` - ${p.description}` : '';
+        if (!Array.isArray(list) || list.length === 0) return 'None.';
+        return list.slice(0, 10).map(p => {
+            const title = p.title || p.name || 'Untitled';
+            const desc = p.description ? ` (${p.description})` : '';
             const tasks = Array.isArray(p.tasks) ? p.tasks : [];
-            const completed = tasks.filter(t => t.completed).length;
-            const total = tasks.length;
-            const progress = total > 0 ? ` (${completed}/${total} tasks completed)` : '';
-            const due = p.dueDate ? ` [Due: ${p.dueDate}]` : '';
-            let taskLines = '';
-            if (tasks.length > 0) {
-                taskLines = '\n' + tasks.map(t => `    - [${t.completed ? 'Completed' : 'Pending'}] ${t.text}`).join('\n');
-            }
-            return `${idx + 1}. ${title}${desc}${due}${progress}${taskLines}`;
+            const taskStr = tasks.length > 0 ? ` [Tasks: ${tasks.map(t => `${t.completed ? '[x]' : '[ ]'} ${t.text}`).join(', ')}]` : '';
+            return `${title}${desc}${taskStr}`;
         }).join('\n');
     }
 
     function formatMemories(list) {
-        if (!Array.isArray(list) || list.length === 0) {
-            return 'No memories recorded yet.';
-        }
-        return list.slice(0, 50).map((m, idx) => `${idx + 1}. ${String(m).slice(0, 300)}`).join('\n');
+        if (!Array.isArray(list) || list.length === 0) return 'None.';
+        return list.slice(0, 25).map(m => `- ${String(m).slice(0, 150)}`).join('\n');
     }
 
-    let personalityInstruction = 'Be helpful, structured, and clear while remaining authentic.';
+    let personalityInstruction = 'Helpful, structured, clear, and direct.';
     if (personality === 'concise') {
-        personalityInstruction = 'Be extremely concise, direct, and terse. Answer immediately with minimal words, zero conversational filler, and no unnecessary pleasantries.';
+        personalityInstruction = 'Extremely concise, minimal words, zero conversational filler.';
     } else if (personality === 'technical') {
-        personalityInstruction = 'Be technically precise, analytical, and structured. Emphasize engineering accuracy, exact technical details, and code or data correctness.';
+        personalityInstruction = 'Technically precise, engineering-focused, exact code/data.';
     } else if (personality === 'casual') {
-        personalityInstruction = 'Be friendly, casual, and relaxed, like an approachable and supportive peer or teammate.';
+        personalityInstruction = 'Friendly, casual, approachable teammate tone.';
     } else if (personality === 'custom' && customPersonality) {
-        personalityInstruction = `Follow the user's custom personality instructions strictly: ${String(customPersonality).slice(0, 500)}`;
+        personalityInstruction = String(customPersonality).slice(0, 300);
     }
     if (personality !== 'custom' && customPersonality && typeof customPersonality === 'string' && customPersonality.trim()) {
-        personalityInstruction += `\nAdditional user personality guidance: ${customPersonality.trim().slice(0, 300)}`;
+        personalityInstruction += ` Guidance: ${customPersonality.trim().slice(0, 200)}`;
     }
 
     function formatGitHub(gh) {
-        if (!gh || !gh.username) return 'No GitHub account connected.';
+        if (!gh || !gh.username) return 'Disconnected.';
         const repos = Array.isArray(gh.repos) ? gh.repos : [];
-        if (repos.length === 0) return `Connected GitHub User: @${gh.username} (no public repositories).`;
-        const repoLines = repos.map(r => `  - ${r.name} (${r.language || 'Code'}, ${r.stars || 0}★): ${r.description || 'No description'}`).join('\n');
-        return `Connected GitHub User: @${gh.username}\nRecent Repositories:\n${repoLines}`;
+        if (repos.length === 0) return `@${gh.username} (no public repos)`;
+        const repoStr = repos.slice(0, 5).map(r => `${r.name} (${r.language || 'Code'}, ${r.stars || 0}★)`).join(', ');
+        return `@${gh.username} repos: ${repoStr}`;
     }
 
     const shouldSearchWeb = Boolean(webSearch) ||
-        /(\bsearch\b|\blook up\b|\blatest\b|\bwho is\b|\bwhat is\b|\bnews\b|\bweather\b|\bcurrent\b|\bwiki\b)/i.test(sanitizedPrompt);
+        /\b(search the web|search online|search google|web search|latest news|current weather)\b/i.test(sanitizedPrompt);
 
     let webSearchResults = [];
     if (shouldSearchWeb) {
@@ -235,7 +206,7 @@ module.exports = async function handler(req, res) {
     }
 
     function formatWebResults(results) {
-        if (!Array.isArray(results) || results.length === 0) return 'No live web search results.';
+        if (!Array.isArray(results) || results.length === 0) return '';
         return results.map((r, i) => `${i + 1}. [${r.title}](${r.url})\n   ${r.snippet}`).join('\n\n');
     }
 
@@ -248,146 +219,41 @@ module.exports = async function handler(req, res) {
     const githubText = formatGitHub(githubData);
     const webSearchText = formatWebResults(webSearchResults);
 
-    const systemPrompt = `You are Easy There AI, the intelligent personal assistant built directly into the user's planner app.
+    const systemPrompt = `You are Easy There AI, assistant embedded in user's personal planner.
+Tone: ${personalityInstruction}
+Context: Date: ${todayVal} (${currentDayOfWeek || ''}), Time: ${currentTime || ''}, Timezone: ${timezone || 'UTC'}, Page: ${currentPage || 'Planner'}${selectedDate ? `, SelectedDate: ${selectedDate}` : ''}
 
-PERSONALITY & TONE:
-${personalityInstruction}
+Domain Knowledge:
+- Hack Club: global nonprofit for high school coders founded by Zach Latta.
+- YSWS ("You Ship, We Ship"): ship real projects, get free hardware/grants. Programs: Blot (art/plotter robot), Sprig (JS tile console), OnBoard ($100 custom PCB), Boreal, Nest (Linux accounts), Arcade & High Seas (hours to prizes), Juice, Outernet, Hack Club Bank.
 
-TEMPORAL CONTEXT:
-- Current Date: ${todayVal} (${currentDayOfWeek || ''})
-- Current Time: ${currentTime || ''}
-- User Timezone: ${timezone || 'UTC'}
-- Active Page: ${currentPage || 'Planner'}
-${selectedDate ? `- Selected Date in Calendar View: ${selectedDate}` : ''}
-
-HACK CLUB & YSWS DOMAIN KNOWLEDGE:
-- Hack Club is a global 501(c)(3) nonprofit network of high school computer programming clubs, makers, and hackathons founded by Zach Latta.
-- "YSWS" stands for "You Ship, We Ship": Hack Club's flagship initiative for teenage makers where students build real software or hardware projects and ship them publicly, and Hack Club rewards them with free hardware, developer grants, or custom prizes.
-- Famous Hack Club & YSWS programs include:
-  * Blot: Build an art generator project, get a custom pen-plotter drawing robot shipped to you.
-  * Sprig: Build a tile-based JS game on the web editor, get a custom physical handheld console shipped to you.
-  * OnBoard: Design a custom printed circuit board (PCB), get $100 to manufacture it.
-  * Boreal: Hackathon in the Canadian wilderness on a train.
-  * Nest: Free Linux server / shell accounts for teenagers.
-  * Arcade & High Seas: Ship coding projects to earn hours and redeem prizes (MacBooks, 3D printers, frameworks).
-  * Juice, Outernet, Hack Club Bank (fiscal sponsorship for youth organizations).
-- When asked about YSWS, Hack Club, or high school coding projects, answer with enthusiasm, deep familiarity, and clear information.
-
-USER'S SAVED MEMORIES & PREFERENCES (LONG-TERM MEMORY):
-${memoriesText}
-
-USER'S SCHEDULE (ALL CALENDAR & GCAL EVENTS):
-${scheduleText}
-
-USER'S TO-DO LIST:
-${todosText}
-
-USER'S PROJECTS:
-${projectsText}
-
-USER'S GITHUB INTEGRATION:
-${githubText}
-${slackConnected ? '- Slack Incoming Webhook: Connected and ready to post messages' : '- Slack: Disconnected'}
-
-SAVED MEETING & CONFERENCE TRANSCRIPTS:
-${transcriptsText}
-
-LIVE WEB SEARCH RESULTS:
-${webSearchText}
-
-CORE CAPABILITIES & RULES:
-1. RESPONSE FORMAT: You MUST ALWAYS reply in valid JSON with this schema:
+User State:
+- Memories: ${memoriesText}
+- Schedule (next 30d): ${scheduleText}
+- To-Dos: ${todosText}
+- Projects: ${projectsText}
+- GitHub: ${githubText}
+- Slack: ${slackConnected ? 'Connected' : 'Disconnected'}
+- Transcripts: ${transcriptsText}
+${webSearchText ? `\nLive Search Results:\n${webSearchText}\n` : ''}
+Rules:
+1. Output valid JSON only:
 {
-  "message": "Direct, clear and well-structured response using Markdown, LaTeX, or Mermaid as needed.",
-  "action": null | {
-    "type": "create_event",
-    "title": "string",
-    "date": "YYYY-MM-DD",
-    "time": "HH:MM AM/PM - HH:MM AM/PM",
-    "startMinutes": number,
-    "endMinutes": number
-  } | {
-    "type": "create_todo",
-    "text": "string"
-  } | {
-    "type": "create_project",
-    "title": "string",
-    "description": "string"
-  } | {
-    "type": "slack_message",
-    "text": "string"
-  },
-  "chatTitle": "Concise 2 to 5 words topic title for this conversation",
-  "newMemory": null | "string",
-  "forgetMemory": null | "string",
+  "message": "Direct, clear markdown response. Use LaTeX ($math$, $$math$$) and Mermaid (\`\`\`mermaid) when helpful.",
+  "action": null | {"type": "create_event", "title": "...", "date": "YYYY-MM-DD", "time": "HH:MM AM/PM - HH:MM AM/PM", "startMinutes": 0, "endMinutes": 60} | {"type": "create_todo", "text": "..."} | {"type": "create_project", "title": "...", "description": "..."} | {"type": "slack_message", "text": "..."},
+  "chatTitle": "Concise 2-5 word topic title",
+  "newMemory": null | "fact to store",
+  "forgetMemory": null | "phrase to remove",
   "webSearchUsed": boolean
 }
-
-2. ANSWERING QUESTIONS (e.g. "When is the next daily meeting?", "What's on my schedule?", "Do I have any tasks?", "What projects am I working on?", "What do you remember about me?", "What are my GitHub repos?"):
-- When the user asks "When is the next [X]?", search the schedule chronologically starting from the current date and current time.
-- If an event is scheduled today but its time has already passed relative to Current Time, find the next upcoming occurrence on future dates.
-- Answer clearly stating the event title, date, day of week, and time.
-- Answer questions about projects, their tasks, and progress directly.
-- When asked what you remember about the user, summarize the saved memories accurately.
-- Answer questions about the user's GitHub repositories and recent activity directly.
-- Set "action": null.
-
-3. CONVERSATIONAL CONTEXT & PRONOUNS:
-- Pay close attention to recent conversation history. If the user refers to "it", "that meeting", "the second task", "earlier", or asks follow-up questions, resolve references using the conversation history.
-
-4. SCHEDULING EVENTS (e.g. "schedule lunch tomorrow at 1pm", "add sync on Friday 3pm to 4pm"):
-- Set "action.type": "create_event".
-- Compute exact "date" (YYYY-MM-DD) using the current date and day of week. If user is in Calendar view and refers to "this date" or "here", use Selected Date.
-- Set "title", "time" (e.g. "1:00 PM - 2:00 PM"), "startMinutes" (0-1439), and "endMinutes".
-- State the confirmed event details in "message".
-
-5. CREATING TO-DOS (e.g. "add to-do buy groceries", "remind me to call the dentist"):
-- Set "action.type": "create_todo".
-- Set "action.text" to the task description.
-- Confirm in "message".
-
-6. CREATING PROJECTS (e.g. "create project Mobile App Redesign", "start new project Portfolio"):
-- Set "action.type": "create_project".
-- Set "action.title" to the project title and "action.description" to any description provided.
-- Confirm in "message".
-
-7. POSTING TO SLACK:
-- When user asks to send a note, task list, summary, or update to Slack (e.g. "send this summary to Slack", "post our tasks to Slack"):
-- If Slack is connected, set "action.type": "slack_message" and "action.text" to the formatted message.
-- If Slack is disconnected, remind user to connect Slack in the Integrations tab.
-
-8. MEETING TRANSCRIPTS & RECAPS:
-- You have access to all saved conference transcripts under 'SAVED MEETING & CONFERENCE TRANSCRIPTS', formatted as <roomname>-<date>.
-- When the user asks about a meeting, call, recap, discussion, or transcript (e.g. "What did we talk about in the sprint planning meeting?", "Summarize today's call", "What did guest say?"):
-- Answer accurately and concisely based on the transcript's dialogue lines.
-- Reference the transcript title (<roomname>-<date>) and date.
-- Set "action": null.
-
-9. CHAT TITLE GENERATION:
-- In "chatTitle", generate a smart, concise 2 to 5 word topic title that accurately summarizes the topic or intent of the conversation (e.g. "Daily Schedule Check", "Science Fair Tasks", "Lunch Meeting Sync", "Meeting Recap", "Project Setup").
-- Do NOT set "chatTitle" as the user's raw message or conversational filler.
-- Do NOT include quotation marks, brackets, or trailing punctuation in "chatTitle".
-
-10. LONG-TERM MEMORY (AUTOMATIC & EXPLICIT):
-- You have access to user memories under 'USER'S SAVED MEMORIES & PREFERENCES'.
-- Respect and apply them across conversations.
-- AUTOMATIC: When the user shares an important personal fact, project detail, preferred tech stack, habit, or workflow that would be valuable to remember:
-  Set "newMemory" to a concise summary of the fact (e.g. "User is building Easy There and participates in Hack Club").
-- EXPLICIT: When the user explicitly instructs you to remember, save, or store something (e.g. "remember that I prefer dark mode", "save to memory: my birthday is June 4", "store this: ..."):
-  ALWAYS extract the memory and set "newMemory" to the exact fact.
-- FORGET: If the user asks to forget something, set "forgetMemory" to the memory keyword or phrase to remove.
-
-11. ATTACHED FILES:
-- If a file is attached, inspect its contents or metadata and answer questions, provide analysis, code reviews, summaries, or insights as requested.
-
-12. FORMATTING, LATEX MATH & FLOWCHARTS:
-- Inside "message", use rich GitHub-Flavored Markdown: bold, italics, tables, bullet lists, ordered lists, and blockquotes.
-- For math formulas, use standard LaTeX: inline math with $formula$ (e.g. $E = mc^2$) and block math with $$formula$$ (e.g. $$\\int_0^1 x dx$$).
-- For flowcharts, sequence diagrams, and architecture maps, output standard Mermaid syntax inside \`\`\`mermaid code blocks.
-- When generating code, always specify the language name in the code fence (e.g. \`\`\`python, \`\`\`javascript, \`\`\`html, \`\`\`css, \`\`\`bash, \`\`\`json).
-- If live web search results were used, set "webSearchUsed": true and cite sources with Markdown links [Source Title](url).
-
-Output valid JSON only. Never wrap the overall JSON response in outer markdown code blocks.`;
+2. Questions: Answer directly using schedule, to-dos, projects, transcripts, or GitHub. Resolve pronouns from history.
+3. Actions:
+- Schedule event: action {type: "create_event", title, date, time, startMinutes, endMinutes}.
+- Add to-do: action {type: "create_todo", text}.
+- Add project: action {type: "create_project", title, description}.
+- Slack: action {type: "slack_message", text} if connected, else prompt to connect in Integrations tab.
+4. Memory: Auto-extract important user facts/preferences into newMemory, or when explicitly commanded ("remember ..."). If asked to forget, set forgetMemory.
+5. Markdown: Use bold, lists, tables, LaTeX math, and Mermaid flowcharts. If live web search used, cite sources with Markdown links and set webSearchUsed: true.`;
 
     const messages = [{ role: 'system', content: systemPrompt }];
 
