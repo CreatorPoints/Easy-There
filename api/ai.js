@@ -428,10 +428,10 @@ Output valid JSON only. Never wrap the overall JSON response in outer markdown c
                 'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                model: 'google/gemini-2.5-flash',
+                model: 'openai/gpt-4o-mini',
                 response_format: { type: 'json_object' },
                 messages: messages,
-                max_tokens: 800,
+                max_tokens: 1500,
                 temperature: 0.2
             })
         });
