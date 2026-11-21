@@ -233,7 +233,9 @@ function updateSlackUI() {
             slackChannelDetails.classList.remove("hidden");
             const topicText = data.topic ? `<div class="slack-channel-topic">Topic: ${data.topic}</div>` : "";
             const purposeText = data.purpose ? `<div class="slack-channel-purpose">Purpose: ${data.purpose}</div>` : "";
-            const membersText = data.numMembers ? `<span class="slack-channel-meta">${data.numMembers} members</span>` : `<span class="slack-channel-meta">${data.mode === 'token' ? 'Bot API' : 'Webhook'}</span>`;
+            const pinsCount = Array.isArray(data.pinnedMessages) && data.pinnedMessages.length > 0 ? ` • ${data.pinnedMessages.length} pinned` : "";
+            const msgsCount = Array.isArray(data.recentMessages) && data.recentMessages.length > 0 ? ` • ${data.recentMessages.length} messages loaded` : "";
+            const membersText = data.numMembers ? `<span class="slack-channel-meta">${data.numMembers} members${pinsCount}${msgsCount}</span>` : `<span class="slack-channel-meta">${data.mode === 'token' ? 'Bot API' : 'Webhook'}${pinsCount}${msgsCount}</span>`;
             slackChannelDetails.innerHTML = `
                 <div class="slack-channel-top">
                     <span class="slack-channel-name">${data.channel || 'Slack Channel'}</span>
@@ -366,6 +368,7 @@ async function connectSlackBot(token, channelId) {
             topic: ch.topic || "",
             purpose: ch.purpose || "",
             numMembers: ch.num_members || 0,
+            pinnedMessages: data.pinnedMessages || [],
             recentMessages: data.recentMessages || [],
             connectedAt: new Date().toISOString()
         };

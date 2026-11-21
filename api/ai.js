@@ -222,11 +222,57 @@ module.exports = async function handler(req, res) {
 
     let slackInfo = 'Disconnected.';
     if (slackData && (slackData.token || slackData.webhook)) {
-        const ch = slackData.channel ? slackData.channel : 'Slack';
-        const topicOrPurpose = slackData.topic || slackData.purpose || '';
-        const purp = topicOrPurpose ? ` (Topic/Purpose: "${topicOrPurpose}")` : '';
-        const modeStr = slackData.mode === 'token' ? 'Live Slack Bot API' : 'Webhook';
-        slackInfo = `Connected to ${ch}${purp}. ${modeStr} active.`;
+        let ch = slackData.channel ? slackData.channel : 'Slack';
+        let topic = slackData.topic || slackData.purpose || '';
+        let purpose = slackData.purpose || '';
+        let pinned = Array.isArray(slackData.pinnedMessages) ? slackData.pinnedMessages : [];
+        let messages = Array.isArray(slackData.recentMessages) ? slackData.recentMessages : [];
+
+        if (slackData.mode === 'token' && slackData.token && slackData.channelId) {
+            const cleanToken = slackData.token.trim();
+            const cleanChannel = slackData.channelId.trim();
+            try {
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000));
+                const fetchPromise = Promise.all([
+                    fetch(`https://slack.com/api/conversations.info?channel=${encodeURIComponent(cleanChannel)}`, {
+                        headers: { 'Authorization': `Bearer ${cleanToken}`, 'Content-Type': 'application/json' }
+                    }).then(r => r.json()).catch(() => null),
+                    fetch(`https://slack.com/api/conversations.history?channel=${encodeURIComponent(cleanChannel)}&limit=25`, {
+                        headers: { 'Authorization': `Bearer ${cleanToken}`, 'Content-Type': 'application/json' }
+                    }).then(r => r.json()).catch(() => null),
+                    fetch(`https://slack.com/api/pins.list?channel=${encodeURIComponent(cleanChannel)}`, {
+                        headers: { 'Authorization': `Bearer ${cleanToken}`, 'Content-Type': 'application/json' }
+                    }).then(r => r.json()).catch(() => null)
+                ]);
+
+                const [liveInfo, liveHistory, livePins] = await Promise.race([fetchPromise, timeoutPromise]);
+                if (liveInfo && liveInfo.ok && liveInfo.channel) {
+                    ch = liveInfo.channel.name ? `#${liveInfo.channel.name}` : ch;
+                    if (liveInfo.channel.topic?.value) topic = liveInfo.channel.topic.value;
+                    if (liveInfo.channel.purpose?.value) purpose = liveInfo.channel.purpose.value;
+                }
+                if (livePins && livePins.ok && Array.isArray(livePins.items)) {
+                    const extractedPins = livePins.items
+                        .filter(it => it.type === 'message' && it.message && it.message.text)
+                        .map(it => it.message.text.slice(0, 800));
+                    if (extractedPins.length > 0) pinned = extractedPins;
+                }
+                if (liveHistory && liveHistory.ok && Array.isArray(liveHistory.messages)) {
+                    messages = liveHistory.messages.map(m => (m.text || '').slice(0, 500)).filter(Boolean);
+                }
+            } catch (liveErr) {}
+        }
+
+        const lines = [`Connected to ${ch}`];
+        if (topic) lines.push(`Topic: "${topic}"`);
+        if (purpose && purpose !== topic) lines.push(`Purpose: "${purpose}"`);
+        if (pinned.length > 0) {
+            lines.push(`Pinned Announcements/Details:\n${pinned.map((p, i) => `[Pin ${i + 1}]: ${p}`).join('\n')}`);
+        }
+        if (messages.length > 0) {
+            lines.push(`Recent Channel Messages:\n${messages.slice(0, 20).map(m => typeof m === 'string' ? m : `${m.user || 'User'}: ${m.text || ''}`).join('\n')}`);
+        }
+        slackInfo = lines.join('\n');
     } else if (slackConnected) {
         slackInfo = 'Connected via Slack Incoming Webhook.';
     }
@@ -258,7 +304,7 @@ Rules:
   "forgetMemory": null | "phrase to remove",
   "webSearchUsed": boolean
 }
-2. Questions: Answer directly using schedule, to-dos, projects, transcripts, GitHub, or Slack. Resolve pronouns from history.
+2. Questions: Answer directly using schedule, to-dos, projects, transcripts, GitHub, or Slack. Resolve pronouns from history. When asked about sponsors, announcements, rules, people, or discussions, check the Slack topic, purpose, pinned messages, and recent messages above.
 3. Actions:
 - Schedule event: action {type: "create_event", title, date, time, startMinutes, endMinutes}.
 - Add to-do: action {type: "create_todo", text}.

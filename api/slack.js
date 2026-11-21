@@ -37,9 +37,10 @@ module.exports = async function handler(req, res) {
 
             const ch = infoData.channel || {};
             let messagesList = [];
+            let pinnedList = [];
 
             try {
-                const historyRes = await fetch(`https://slack.com/api/conversations.history?channel=${encodeURIComponent(cleanChannel)}&limit=5`, {
+                const historyRes = await fetch(`https://slack.com/api/conversations.history?channel=${encodeURIComponent(cleanChannel)}&limit=25`, {
                     headers: {
                         'Authorization': `Bearer ${cleanToken}`,
                         'Content-Type': 'application/json'
@@ -49,11 +50,26 @@ module.exports = async function handler(req, res) {
                 if (historyData.ok && Array.isArray(historyData.messages)) {
                     messagesList = historyData.messages.map(m => ({
                         user: m.user || 'User',
-                        text: (m.text || '').slice(0, 200),
+                        text: (m.text || '').slice(0, 600),
                         time: m.ts
                     }));
                 }
             } catch (histErr) {}
+
+            try {
+                const pinsRes = await fetch(`https://slack.com/api/pins.list?channel=${encodeURIComponent(cleanChannel)}`, {
+                    headers: {
+                        'Authorization': `Bearer ${cleanToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const pinsData = await pinsRes.json();
+                if (pinsData.ok && Array.isArray(pinsData.items)) {
+                    pinnedList = pinsData.items
+                        .filter(item => item.type === 'message' && item.message && item.message.text)
+                        .map(item => item.message.text.slice(0, 800));
+                }
+            } catch (pinsErr) {}
 
             return res.status(200).json({
                 ok: true,
@@ -65,6 +81,7 @@ module.exports = async function handler(req, res) {
                     is_private: Boolean(ch.is_private),
                     num_members: ch.num_members || 0
                 },
+                pinnedMessages: pinnedList,
                 recentMessages: messagesList
             });
         } catch (err) {
