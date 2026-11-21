@@ -811,6 +811,79 @@ h2 {
     }
 }
 
+.slack-mode-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    background-color: #0c0c0c;
+    padding: 4px;
+    border-radius: 6px;
+    border: 1px solid #1a1a1a;
+}
+
+.slack-mode-tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #888888;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-family: 'Poppins', sans-serif;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.slack-mode-tab:hover {
+    color: #ffffff;
+}
+
+.slack-mode-tab.active {
+    background-color: #1a1a1a;
+    color: #ffffff;
+    font-weight: 500;
+}
+
+.slack-channel-card {
+    background-color: #080808;
+    border: 1px solid #1a1a1a;
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.slack-channel-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.slack-channel-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.slack-channel-meta {
+    font-size: 0.75rem;
+    color: #4ade80;
+}
+
+.slack-channel-topic {
+    font-size: 0.82rem;
+    color: #cccccc;
+    line-height: 1.4;
+}
+
+.slack-channel-purpose {
+    font-size: 0.78rem;
+    color: #888888;
+    line-height: 1.35;
+}
+
 .primary-btn {
     background-color: #ffffff;
     color: #000000;

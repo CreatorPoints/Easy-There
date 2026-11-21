@@ -221,10 +221,12 @@ module.exports = async function handler(req, res) {
     const webSearchText = formatWebResults(webSearchResults);
 
     let slackInfo = 'Disconnected.';
-    if (slackData && slackData.webhook) {
+    if (slackData && (slackData.token || slackData.webhook)) {
         const ch = slackData.channel ? slackData.channel : 'Slack';
-        const purp = slackData.purpose ? ` (Purpose: "${slackData.purpose}")` : '';
-        slackInfo = `Connected to ${ch}${purp}. Webhook active.`;
+        const topicOrPurpose = slackData.topic || slackData.purpose || '';
+        const purp = topicOrPurpose ? ` (Topic/Purpose: "${topicOrPurpose}")` : '';
+        const modeStr = slackData.mode === 'token' ? 'Live Slack Bot API' : 'Webhook';
+        slackInfo = `Connected to ${ch}${purp}. ${modeStr} active.`;
     } else if (slackConnected) {
         slackInfo = 'Connected via Slack Incoming Webhook.';
     }
@@ -261,7 +263,7 @@ Rules:
 - Schedule event: action {type: "create_event", title, date, time, startMinutes, endMinutes}.
 - Add to-do: action {type: "create_todo", text}.
 - Add project: action {type: "create_project", title, description}.
-- Slack: action {type: "slack_message", text} if connected, else prompt to connect in Integrations tab. When user asks what the Slack channel is about or what channel you post to, state the channel name and purpose directly from the Slack context above or saved memories. If no channel purpose is configured yet, explain that you are connected via webhook and ask the user what the channel is called and used for (or suggest setting it in Integrations); when the user tells you in chat, store it in newMemory (e.g. "Slack channel is #name: used for X") so you permanently remember it.
+- Slack: action {type: "slack_message", text} if connected, else prompt to connect in Integrations tab. When user asks what the Slack channel is about or what channel you post to, state the channel name, topic, and purpose directly from the Slack context above or saved memories. If no channel details are configured yet, explain how they can connect via Bot Token (Auto-Fetch) or set the channel info in Integrations; when the user tells you in chat, store it in newMemory (e.g. "Slack channel is #name: used for X") so you permanently remember it.
 4. Memory: Auto-extract important user facts/preferences into newMemory, or when explicitly commanded ("remember ..."). If asked to forget, set forgetMemory.
 5. Markdown: Use bold, lists, tables, LaTeX math, and Mermaid flowcharts. If live web search used, cite sources with Markdown links and set webSearchUsed: true.`;
 

@@ -108,12 +108,30 @@
                         <div class="integration-header">
                             <div class="integration-info">
                                 <h2>Slack</h2>
-                                <p class="integration-desc">Connect an Incoming Webhook to let Easy There AI send meeting summaries, task updates, and notes to Slack.</p>
+                                <p class="integration-desc">Connect Slack via Bot Token to automatically fetch channel topic and messages, or use an Incoming Webhook for updates.</p>
                             </div>
                             <span id="slack-status-badge" class="status-badge disconnected">Disconnected</span>
                         </div>
                         <div class="integration-body">
-                            <form id="slack-form" class="integration-form">
+                            <div class="slack-mode-tabs">
+                                <button type="button" class="slack-mode-tab active" id="slack-mode-token-btn">Bot Token (Auto-Fetch)</button>
+                                <button type="button" class="slack-mode-tab" id="slack-mode-webhook-btn">Incoming Webhook</button>
+                            </div>
+                            <form id="slack-token-form" class="integration-form">
+                                <div class="integration-field-block">
+                                    <label for="slack-token-input" class="conference-label">Slack Bot User OAuth Token</label>
+                                    <input type="password" id="slack-token-input" class="conference-input" required autocomplete="off" aria-label="Slack Bot Token">
+                                </div>
+                                <div class="integration-field-block">
+                                    <label for="slack-channel-id-input" class="conference-label">Channel ID (Right-click channel in Slack &gt; Copy link)</label>
+                                    <input type="text" id="slack-channel-id-input" class="conference-input" required autocomplete="off" aria-label="Slack Channel ID">
+                                </div>
+                                <div class="integration-actions" style="margin-top: 8px;">
+                                    <button type="submit" id="slack-token-submit-btn" class="primary-btn">Connect &amp; Fetch Channel Details</button>
+                                    <button type="button" id="slack-token-disconnect-btn" class="secondary-btn hidden">Disconnect</button>
+                                </div>
+                            </form>
+                            <form id="slack-webhook-form" class="integration-form hidden">
                                 <div class="integration-field-block">
                                     <label for="slack-webhook-input" class="conference-label">Slack Incoming Webhook URL</label>
                                     <input type="url" id="slack-webhook-input" class="conference-input" required autocomplete="off" aria-label="Slack Webhook URL">
@@ -128,12 +146,13 @@
                                         <input type="text" id="slack-purpose-input" class="conference-input" autocomplete="off" aria-label="Channel topic or purpose">
                                     </div>
                                 </div>
-                                <div class="integration-actions" style="margin-top: 10px;">
-                                    <button type="submit" id="slack-connect-btn" class="primary-btn">Save Slack Configuration</button>
-                                    <button type="button" id="slack-disconnect-btn" class="secondary-btn hidden">Disconnect</button>
+                                <div class="integration-actions" style="margin-top: 8px;">
+                                    <button type="submit" id="slack-webhook-submit-btn" class="primary-btn">Save Webhook Configuration</button>
+                                    <button type="button" id="slack-webhook-disconnect-btn" class="secondary-btn hidden">Disconnect</button>
                                 </div>
                             </form>
                             <p id="slack-feedback" class="feedback-msg"></p>
+                            <div id="slack-channel-details" class="slack-channel-card hidden"></div>
                         </div>
                     </div>
                 </div>
