@@ -114,10 +114,22 @@
                         </div>
                         <div class="integration-body">
                             <form id="slack-form" class="integration-form">
-                                <label for="slack-webhook-input" class="conference-label">Slack Incoming Webhook URL</label>
-                                <div class="integration-input-group">
+                                <div class="integration-field-block">
+                                    <label for="slack-webhook-input" class="conference-label">Slack Incoming Webhook URL</label>
                                     <input type="url" id="slack-webhook-input" class="conference-input" required autocomplete="off" aria-label="Slack Webhook URL">
-                                    <button type="submit" id="slack-connect-btn" class="primary-btn">Save Webhook</button>
+                                </div>
+                                <div class="integration-fields-row">
+                                    <div class="integration-field-block">
+                                        <label for="slack-channel-input" class="conference-label">Channel Name</label>
+                                        <input type="text" id="slack-channel-input" class="conference-input" autocomplete="off" aria-label="Slack channel name">
+                                    </div>
+                                    <div class="integration-field-block">
+                                        <label for="slack-purpose-input" class="conference-label">Channel Topic or Purpose</label>
+                                        <input type="text" id="slack-purpose-input" class="conference-input" autocomplete="off" aria-label="Channel topic or purpose">
+                                    </div>
+                                </div>
+                                <div class="integration-actions" style="margin-top: 10px;">
+                                    <button type="submit" id="slack-connect-btn" class="primary-btn">Save Slack Configuration</button>
                                     <button type="button" id="slack-disconnect-btn" class="secondary-btn hidden">Disconnect</button>
                                 </div>
                             </form>

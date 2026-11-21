@@ -787,6 +787,30 @@ h2 {
     gap: 10px;
 }
 
+.integration-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.integration-field-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+}
+
+.integration-fields-row {
+    display: flex;
+    gap: 12px;
+}
+
+@media (max-width: 600px) {
+    .integration-fields-row {
+        flex-direction: column;
+    }
+}
+
 .primary-btn {
     background-color: #ffffff;
     color: #000000;

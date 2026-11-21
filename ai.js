@@ -211,8 +211,21 @@
         }
     }
 
+    function getStoredSlackData() {
+        try {
+            const raw = localStorage.getItem("easy_there_slack_data");
+            if (raw) return JSON.parse(raw);
+        } catch (e) {}
+        const webhook = localStorage.getItem("easy_there_slack_webhook");
+        if (webhook) {
+            return { webhook: webhook, channel: "", purpose: "" };
+        }
+        return null;
+    }
+
     function getStoredSlackWebhook() {
-        return localStorage.getItem("easy_there_slack_webhook") || null;
+        const data = getStoredSlackData();
+        return data ? data.webhook : (localStorage.getItem("easy_there_slack_webhook") || null);
     }
 
     function updateSearchToggleUI() {
@@ -1222,6 +1235,7 @@
                 webSearch: isWebSearchEnabled,
                 githubData: getStoredGitHubData(),
                 slackConnected: Boolean(getStoredSlackWebhook()),
+                slackData: getStoredSlackData(),
                 file: fileToSend ? {
                     name: fileToSend.name,
                     size: fileToSend.size,

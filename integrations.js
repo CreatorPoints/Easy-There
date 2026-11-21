@@ -109,6 +109,8 @@ const ghPreview = document.getElementById("github-repos-preview");
 
 const slackForm = document.getElementById("slack-form");
 const slackInput = document.getElementById("slack-webhook-input");
+const slackChannelInput = document.getElementById("slack-channel-input");
+const slackPurposeInput = document.getElementById("slack-purpose-input");
 const slackConnectBtn = document.getElementById("slack-connect-btn");
 const slackDisconnectBtn = document.getElementById("slack-disconnect-btn");
 const slackStatusBadge = document.getElementById("slack-status-badge");
@@ -123,8 +125,25 @@ function getStoredGitHubData() {
     }
 }
 
+function getStoredSlackData() {
+    try {
+        const raw = localStorage.getItem("easy_there_slack_data");
+        if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    const webhook = localStorage.getItem("easy_there_slack_webhook");
+    if (webhook) {
+        return {
+            webhook: webhook,
+            channel: "",
+            purpose: ""
+        };
+    }
+    return null;
+}
+
 function getStoredSlackWebhook() {
-    return localStorage.getItem("easy_there_slack_webhook") || "";
+    const data = getStoredSlackData();
+    return data ? data.webhook : (localStorage.getItem("easy_there_slack_webhook") || "");
 }
 
 function updateGitHubUI() {
@@ -168,22 +187,27 @@ function updateGitHubUI() {
 
 function updateSlackUI() {
     if (!slackStatusBadge) return;
-    const webhook = getStoredSlackWebhook();
-    if (webhook) {
-        slackStatusBadge.textContent = "Connected";
+    const data = getStoredSlackData();
+    if (data && data.webhook) {
+        slackStatusBadge.textContent = data.channel ? data.channel : "Connected";
         slackStatusBadge.className = "status-badge connected";
-        if (slackInput) slackInput.value = webhook;
-        if (slackConnectBtn) slackConnectBtn.textContent = "Update Webhook";
+        if (slackInput) slackInput.value = data.webhook;
+        if (slackChannelInput) slackChannelInput.value = data.channel || "";
+        if (slackPurposeInput) slackPurposeInput.value = data.purpose || "";
+        if (slackConnectBtn) slackConnectBtn.textContent = "Update Slack Configuration";
         if (slackDisconnectBtn) slackDisconnectBtn.classList.remove("hidden");
         if (slackFeedback) {
-            slackFeedback.textContent = "Slack incoming webhook is active and ready for AI messages.";
+            const extra = data.purpose ? ` (${data.purpose})` : "";
+            slackFeedback.textContent = `Slack webhook active for ${data.channel || 'channel'}${extra}. Ready for AI messages.`;
             slackFeedback.style.color = "#4ade80";
         }
     } else {
         slackStatusBadge.textContent = "Disconnected";
         slackStatusBadge.className = "status-badge disconnected";
         if (slackInput) slackInput.value = "";
-        if (slackConnectBtn) slackConnectBtn.textContent = "Save Webhook";
+        if (slackChannelInput) slackChannelInput.value = "";
+        if (slackPurposeInput) slackPurposeInput.value = "";
+        if (slackConnectBtn) slackConnectBtn.textContent = "Save Slack Configuration";
         if (slackDisconnectBtn) slackDisconnectBtn.classList.add("hidden");
         if (slackFeedback) slackFeedback.textContent = "";
     }
@@ -243,8 +267,8 @@ function disconnectGitHub() {
     updateGitHubUI();
 }
 
-function connectSlack(url) {
-    const cleanUrl = url.trim();
+function connectSlack(url, channel, purpose) {
+    const cleanUrl = (url || "").trim();
     if (!cleanUrl.startsWith("https://hooks.slack.com/")) {
         if (slackFeedback) {
             slackFeedback.textContent = "Invalid Slack Webhook URL. It must start with https://hooks.slack.com/";
@@ -253,11 +277,20 @@ function connectSlack(url) {
         return;
     }
 
+    const slackData = {
+        webhook: cleanUrl,
+        channel: (channel || "").trim(),
+        purpose: (purpose || "").trim()
+    };
+
     localStorage.setItem("easy_there_slack_webhook", cleanUrl);
+    localStorage.setItem("easy_there_slack_data", JSON.stringify(slackData));
+
     if (window.EasyThereFirebase && window.EasyThereFirebase.syncIntegrationsToCloud) {
         window.EasyThereFirebase.syncIntegrationsToCloud({
             github: getStoredGitHubData(),
-            slackWebhook: cleanUrl
+            slackWebhook: cleanUrl,
+            slackData: slackData
         });
     }
     updateSlackUI();
@@ -265,10 +298,12 @@ function connectSlack(url) {
 
 function disconnectSlack() {
     localStorage.removeItem("easy_there_slack_webhook");
+    localStorage.removeItem("easy_there_slack_data");
     if (window.EasyThereFirebase && window.EasyThereFirebase.syncIntegrationsToCloud) {
         window.EasyThereFirebase.syncIntegrationsToCloud({
             github: getStoredGitHubData(),
-            slackWebhook: null
+            slackWebhook: null,
+            slackData: null
         });
     }
     updateSlackUI();
@@ -291,7 +326,9 @@ if (slackForm) {
     slackForm.addEventListener("submit", function(e) {
         e.preventDefault();
         if (slackInput) {
-            connectSlack(slackInput.value);
+            const channelVal = slackChannelInput ? slackChannelInput.value : "";
+            const purposeVal = slackPurposeInput ? slackPurposeInput.value : "";
+            connectSlack(slackInput.value, channelVal, purposeVal);
         }
     });
 }
@@ -309,7 +346,12 @@ if (window.EasyThereFirebase) {
                 if (cloudIntegrations.github) {
                     localStorage.setItem("easy_there_github_data", JSON.stringify(cloudIntegrations.github));
                 }
-                if (cloudIntegrations.slackWebhook) {
+                if (cloudIntegrations.slackData) {
+                    localStorage.setItem("easy_there_slack_data", JSON.stringify(cloudIntegrations.slackData));
+                    if (cloudIntegrations.slackData.webhook) {
+                        localStorage.setItem("easy_there_slack_webhook", cloudIntegrations.slackData.webhook);
+                    }
+                } else if (cloudIntegrations.slackWebhook) {
                     localStorage.setItem("easy_there_slack_webhook", cloudIntegrations.slackWebhook);
                 }
                 updateGitHubUI();

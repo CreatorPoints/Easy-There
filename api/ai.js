@@ -29,7 +29,8 @@ module.exports = async function handler(req, res) {
         file,
         webSearch,
         githubData,
-        slackConnected
+        slackConnected,
+        slackData
     } = req.body || {};
 
     if ((!prompt || typeof prompt !== 'string' || !prompt.trim()) && (!file || typeof file !== 'object')) {
@@ -219,6 +220,15 @@ module.exports = async function handler(req, res) {
     const githubText = formatGitHub(githubData);
     const webSearchText = formatWebResults(webSearchResults);
 
+    let slackInfo = 'Disconnected.';
+    if (slackData && slackData.webhook) {
+        const ch = slackData.channel ? slackData.channel : 'Slack';
+        const purp = slackData.purpose ? ` (Purpose: "${slackData.purpose}")` : '';
+        slackInfo = `Connected to ${ch}${purp}. Webhook active.`;
+    } else if (slackConnected) {
+        slackInfo = 'Connected via Slack Incoming Webhook.';
+    }
+
     const systemPrompt = `You are Easy There AI, assistant embedded in user's personal planner.
 Tone: ${personalityInstruction}
 Context: Date: ${todayVal} (${currentDayOfWeek || ''}), Time: ${currentTime || ''}, Timezone: ${timezone || 'UTC'}, Page: ${currentPage || 'Planner'}${selectedDate ? `, SelectedDate: ${selectedDate}` : ''}
@@ -233,7 +243,7 @@ User State:
 - To-Dos: ${todosText}
 - Projects: ${projectsText}
 - GitHub: ${githubText}
-- Slack: ${slackConnected ? 'Connected' : 'Disconnected'}
+- Slack: ${slackInfo}
 - Transcripts: ${transcriptsText}
 ${webSearchText ? `\nLive Search Results:\n${webSearchText}\n` : ''}
 Rules:
@@ -246,12 +256,12 @@ Rules:
   "forgetMemory": null | "phrase to remove",
   "webSearchUsed": boolean
 }
-2. Questions: Answer directly using schedule, to-dos, projects, transcripts, or GitHub. Resolve pronouns from history.
+2. Questions: Answer directly using schedule, to-dos, projects, transcripts, GitHub, or Slack. Resolve pronouns from history.
 3. Actions:
 - Schedule event: action {type: "create_event", title, date, time, startMinutes, endMinutes}.
 - Add to-do: action {type: "create_todo", text}.
 - Add project: action {type: "create_project", title, description}.
-- Slack: action {type: "slack_message", text} if connected, else prompt to connect in Integrations tab.
+- Slack: action {type: "slack_message", text} if connected, else prompt to connect in Integrations tab. When user asks what the Slack channel is about or what channel you post to, state the channel name and purpose directly from the Slack context above or saved memories. If no channel purpose is configured yet, explain that you are connected via webhook and ask the user what the channel is called and used for (or suggest setting it in Integrations); when the user tells you in chat, store it in newMemory (e.g. "Slack channel is #name: used for X") so you permanently remember it.
 4. Memory: Auto-extract important user facts/preferences into newMemory, or when explicitly commanded ("remember ..."). If asked to forget, set forgetMemory.
 5. Markdown: Use bold, lists, tables, LaTeX math, and Mermaid flowcharts. If live web search used, cite sources with Markdown links and set webSearchUsed: true.`;
 
