@@ -249,7 +249,7 @@ User State:
 - Transcripts: ${transcriptsText}
 ${webSearchText ? `\nLive Search Results:\n${webSearchText}\n` : ''}
 Rules:
-1. Output valid JSON only:
+1. Output valid JSON only with "message" as the first key:
 {
   "message": "Direct, clear markdown response. Use LaTeX ($math$, $$math$$) and Mermaid (\`\`\`mermaid) when helpful.",
   "action": null | {"type": "create_event", "title": "...", "date": "YYYY-MM-DD", "time": "HH:MM AM/PM - HH:MM AM/PM", "startMinutes": 0, "endMinutes": 60} | {"type": "create_todo", "text": "..."} | {"type": "create_project", "title": "...", "description": "..."} | {"type": "slack_message", "text": "..."},
@@ -298,7 +298,56 @@ Rules:
         messages.push({ role: 'user', content: sanitizedPrompt });
     }
 
+    function extractMessageTokens(accumulated, state) {
+        if (state.messageDone) return '';
+        if (!state.inMessage) {
+            const match = accumulated.match(/"message"\s*:\s*"/);
+            if (!match) return '';
+            state.inMessage = true;
+            state.scanIndex = match.index + match[0].length;
+        }
+        let emitted = '';
+        while (state.scanIndex < accumulated.length) {
+            const ch = accumulated[state.scanIndex];
+            if (ch === '\\') {
+                if (state.scanIndex + 1 >= accumulated.length) {
+                    break;
+                }
+                const nextCh = accumulated[state.scanIndex + 1];
+                if (nextCh === '"') emitted += '"';
+                else if (nextCh === '\\') emitted += '\\';
+                else if (nextCh === '/') emitted += '/';
+                else if (nextCh === 'b') emitted += '\b';
+                else if (nextCh === 'f') emitted += '\f';
+                else if (nextCh === 'n') emitted += '\n';
+                else if (nextCh === 'r') emitted += '\r';
+                else if (nextCh === 't') emitted += '\t';
+                else if (nextCh === 'u') {
+                    if (state.scanIndex + 5 >= accumulated.length) {
+                        break;
+                    }
+                    const hex = accumulated.slice(state.scanIndex + 2, state.scanIndex + 6);
+                    emitted += String.fromCharCode(parseInt(hex, 16));
+                    state.scanIndex += 4;
+                } else {
+                    emitted += nextCh;
+                }
+                state.scanIndex += 2;
+            } else if (ch === '"') {
+                state.messageDone = true;
+                state.scanIndex++;
+                break;
+            } else {
+                emitted += ch;
+                state.scanIndex++;
+            }
+        }
+        return emitted;
+    }
+
     try {
+        const wantsStream = req.body?.stream !== false;
+
         const response = await fetch('https://ai.hackclub.com/proxy/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -310,7 +359,8 @@ Rules:
                 response_format: { type: 'json_object' },
                 messages: messages,
                 max_tokens: 1500,
-                temperature: 0.2
+                temperature: 0.2,
+                stream: wantsStream
             })
         });
 
@@ -318,26 +368,109 @@ Rules:
             return res.status(response.status).json({ error: 'AI service returned an error' });
         }
 
-        const data = await response.json();
-        const rawContent = data.choices?.[0]?.message?.content;
-        if (!rawContent) {
-            return res.status(502).json({ error: 'Empty response from AI' });
+        if (!wantsStream) {
+            const data = await response.json();
+            const rawContent = data.choices?.[0]?.message?.content;
+            if (!rawContent) {
+                return res.status(502).json({ error: 'Empty response from AI' });
+            }
+            let parsed;
+            try {
+                parsed = JSON.parse(rawContent);
+            } catch (e) {
+                const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    parsed = JSON.parse(jsonMatch[0]);
+                } else {
+                    parsed = { message: rawContent, action: null };
+                }
+            }
+            return res.status(200).json(parsed);
         }
 
-        let parsed;
-        try {
-            parsed = JSON.parse(rawContent);
-        } catch (e) {
-            const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                parsed = JSON.parse(jsonMatch[0]);
-            } else {
-                parsed = { message: rawContent, action: null };
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'
+        });
+
+        const decoder = new TextDecoder();
+        let sseBuffer = '';
+        let accumulatedJson = '';
+        const streamState = { inMessage: false, messageDone: false, scanIndex: 0 };
+
+        for await (const chunk of response.body) {
+            sseBuffer += typeof chunk === 'string' ? chunk : decoder.decode(chunk, { stream: true });
+            const lines = sseBuffer.split('\n');
+            sseBuffer = lines.pop() || '';
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line || line.startsWith(':')) continue;
+                if (line === 'data: [DONE]') continue;
+                if (line.startsWith('data: ')) {
+                    const rawJson = line.slice(6);
+                    try {
+                        const parsedChunk = JSON.parse(rawJson);
+                        const delta = parsedChunk.choices?.[0]?.delta?.content || '';
+                        if (delta) {
+                            accumulatedJson += delta;
+                            const textToken = extractMessageTokens(accumulatedJson, streamState);
+                            if (textToken) {
+                                res.write(`data: ${JSON.stringify({ type: 'token', content: textToken })}\n\n`);
+                            }
+                        }
+                    } catch (e) {}
+                }
             }
         }
 
-        return res.status(200).json(parsed);
+        if (sseBuffer.trim().startsWith('data: ') && sseBuffer.trim() !== 'data: [DONE]') {
+            try {
+                const parsedChunk = JSON.parse(sseBuffer.trim().slice(6));
+                const delta = parsedChunk.choices?.[0]?.delta?.content || '';
+                if (delta) {
+                    accumulatedJson += delta;
+                    const textToken = extractMessageTokens(accumulatedJson, streamState);
+                    if (textToken) {
+                        res.write(`data: ${JSON.stringify({ type: 'token', content: textToken })}\n\n`);
+                    }
+                }
+            } catch (e) {}
+        }
+
+        if (!streamState.inMessage && accumulatedJson.trim()) {
+            res.write(`data: ${JSON.stringify({ type: 'token', content: accumulatedJson })}\n\n`);
+        }
+
+        let parsed = {};
+        try {
+            parsed = JSON.parse(accumulatedJson);
+        } catch (e) {
+            const jsonMatch = accumulatedJson.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                try {
+                    parsed = JSON.parse(jsonMatch[0]);
+                } catch (e2) {}
+            }
+        }
+
+        const donePayload = JSON.stringify({
+            type: 'done',
+            action: parsed.action || null,
+            chatTitle: parsed.chatTitle || null,
+            newMemory: parsed.newMemory || null,
+            forgetMemory: parsed.forgetMemory || null,
+            webSearchUsed: Boolean(parsed.webSearchUsed || (webSearchResults && webSearchResults.length > 0))
+        });
+        res.write(`data: ${donePayload}\n\n`);
+        res.end();
     } catch (err) {
-        return res.status(500).json({ error: 'Failed to process AI request' });
+        if (!res.headersSent) {
+            return res.status(500).json({ error: 'Failed to process AI request' });
+        }
+        res.write(`data: ${JSON.stringify({ error: 'Failed to process AI request' })}\n\n`);
+        res.end();
     }
 };

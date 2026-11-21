@@ -2771,6 +2771,20 @@ h2 {
     white-space: normal;
 }
 
+.ai-typing-cursor {
+    display: inline-block;
+    width: 6px;
+    height: 14px;
+    background-color: #888888;
+    vertical-align: middle;
+    animation: blink-cursor 0.8s infinite;
+}
+
+@keyframes blink-cursor {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
 .assistant-message .ai-chat-bubble p {
     margin: 0 0 10px 0;
 }

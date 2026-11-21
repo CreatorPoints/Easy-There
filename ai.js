@@ -788,11 +788,15 @@
                 bubbleWrap.appendChild(fileCard);
             }
 
-            if (msg.content) {
+            if (msg.content || msg.role === "assistant") {
                 const bubble = document.createElement("div");
                 bubble.className = "ai-chat-bubble";
                 if (msg.role === "assistant") {
-                    renderRichAssistantContent(msg.content, bubble);
+                    if (msg.content) {
+                        renderRichAssistantContent(msg.content, bubble);
+                    } else {
+                        bubble.innerHTML = `<span class="ai-typing-cursor"></span>`;
+                    }
                 } else {
                     bubble.textContent = msg.content;
                 }
@@ -1200,6 +1204,17 @@
             active.messages = [];
         }
         active.messages.push(userMsg);
+
+        const assistantMsg = {
+            role: "assistant",
+            content: "",
+            time: getCurrentTime(),
+            actionInfo: null,
+            memoryInfo: null,
+            webSearchUsed: false
+        };
+        active.messages.push(assistantMsg);
+
         active.updatedAt = new Date().toISOString();
         saveChats();
         renderActiveChatMessages();
@@ -1207,9 +1222,14 @@
 
         setLoading(true);
 
+        const assistantMessageEls = threadEl ? threadEl.querySelectorAll(".assistant-message") : [];
+        const lastAssistantMsgEl = assistantMessageEls.length > 0 ? assistantMessageEls[assistantMessageEls.length - 1] : null;
+        const bubbleEl = lastAssistantMsgEl ? lastAssistantMsgEl.querySelector(".ai-chat-bubble") : null;
+        const currentTargetChatId = active.id;
+
         try {
             const historySlice = active.messages
-                .filter(function(m) { return m.role === "user" || m.role === "assistant"; })
+                .filter(function(m) { return (m.role === "user" || m.role === "assistant") && m !== assistantMsg && m.content; })
                 .slice(-8)
                 .map(function(m) {
                     return { role: m.role, content: m.content };
@@ -1251,35 +1271,86 @@
                 body: JSON.stringify(payload)
             });
 
-            const data = await res.json();
-
-            if (!res.ok || data.error) {
-                active.messages.push({
-                    role: "assistant",
-                    content: data.error || "An error occurred while communicating with AI.",
-                    time: getCurrentTime(),
-                    action: null
-                });
+            if (!res.ok) {
+                const errData = await res.json().catch(function() { return {}; });
+                assistantMsg.content = errData.error || "An error occurred while communicating with AI.";
                 active.updatedAt = new Date().toISOString();
                 saveChats();
-                renderActiveChatMessages();
-                setLoading(false);
+                renderActiveChat();
                 return;
+            }
+
+            let doneData = null;
+            let accumulatedText = "";
+
+            if (res.body && typeof res.body.getReader === "function") {
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let streamBuffer = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    streamBuffer += decoder.decode(value, { stream: true });
+                    const lines = streamBuffer.split("\n");
+                    streamBuffer = lines.pop() || "";
+
+                    for (let i = 0; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (!line || !line.startsWith("data: ")) continue;
+                        const jsonPayload = line.slice(6);
+                        if (jsonPayload === "[DONE]") continue;
+
+                        try {
+                            const evt = JSON.parse(jsonPayload);
+                            if (evt.error) {
+                                accumulatedText = evt.error;
+                                assistantMsg.content = accumulatedText;
+                                if (bubbleEl && activeChatId === currentTargetChatId) {
+                                    bubbleEl.textContent = accumulatedText;
+                                }
+                            } else if (evt.type === "token" && typeof evt.content === "string") {
+                                accumulatedText += evt.content;
+                                assistantMsg.content = accumulatedText;
+                                if (bubbleEl && activeChatId === currentTargetChatId) {
+                                    if (window.marked && typeof window.marked.parse === "function") {
+                                        bubbleEl.innerHTML = window.marked.parse(accumulatedText, { breaks: true, gfm: true });
+                                    } else {
+                                        bubbleEl.textContent = accumulatedText;
+                                    }
+                                    threadEl.scrollTop = threadEl.scrollHeight;
+                                }
+                            } else if (evt.type === "done") {
+                                doneData = evt;
+                            }
+                        } catch (e) {}
+                    }
+                }
+            } else {
+                const data = await res.json();
+                accumulatedText = data.message || "Done.";
+                assistantMsg.content = accumulatedText;
+                doneData = data;
+            }
+
+            if (!accumulatedText) {
+                accumulatedText = "Done.";
+                assistantMsg.content = accumulatedText;
             }
 
             let actionBadgeText = null;
 
-            if (data.action && typeof data.action === "object") {
-                if (data.action.type === "create_event" && data.action.date && data.action.title) {
+            if (doneData && doneData.action && typeof doneData.action === "object") {
+                if (doneData.action.type === "create_event" && doneData.action.date && doneData.action.title) {
                     const events = getCalendarEvents();
-                    if (!events[data.action.date]) {
-                        events[data.action.date] = [];
+                    if (!events[doneData.action.date]) {
+                        events[doneData.action.date] = [];
                     }
-                    events[data.action.date].push({
-                        title: data.action.title,
-                        time: data.action.time || "All Day",
-                        startMinutes: data.action.startMinutes !== undefined ? data.action.startMinutes : null,
-                        endMinutes: data.action.endMinutes !== undefined ? data.action.endMinutes : null,
+                    events[doneData.action.date].push({
+                        title: doneData.action.title,
+                        time: doneData.action.time || "All Day",
+                        startMinutes: doneData.action.startMinutes !== undefined ? doneData.action.startMinutes : null,
+                        endMinutes: doneData.action.endMinutes !== undefined ? doneData.action.endMinutes : null,
                         source: "manual"
                     });
                     try {
@@ -1288,11 +1359,11 @@
                     if (window.EasyThereFirebase && window.EasyThereFirebase.syncEventsToCloud) {
                         window.EasyThereFirebase.syncEventsToCloud(events);
                     }
-                    actionBadgeText = `Scheduled: "${data.action.title}" on ${data.action.date} (${data.action.time || 'All Day'})`;
-                } else if (data.action.type === "create_todo" && data.action.text) {
+                    actionBadgeText = `Scheduled: "${doneData.action.title}" on ${doneData.action.date} (${doneData.action.time || 'All Day'})`;
+                } else if (doneData.action.type === "create_todo" && doneData.action.text) {
                     const todos = getTodos();
                     todos.push({
-                        text: data.action.text,
+                        text: doneData.action.text,
                         completed: false
                     });
                     try {
@@ -1301,13 +1372,13 @@
                     if (window.EasyThereFirebase && window.EasyThereFirebase.syncTodosToCloud) {
                         window.EasyThereFirebase.syncTodosToCloud(todos);
                     }
-                    actionBadgeText = `Added To-Do: "${data.action.text}"`;
-                } else if (data.action.type === "create_project" && data.action.title) {
+                    actionBadgeText = `Added To-Do: "${doneData.action.text}"`;
+                } else if (doneData.action.type === "create_project" && doneData.action.title) {
                     const projects = getProjects();
                     const newProj = {
                         id: `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-                        title: data.action.title.trim(),
-                        description: (data.action.description || "").trim(),
+                        title: doneData.action.title.trim(),
+                        description: (doneData.action.description || "").trim(),
                         color: "default",
                         createdAt: new Date().toISOString(),
                         tasks: []
@@ -1319,8 +1390,8 @@
                     if (window.EasyThereFirebase && window.EasyThereFirebase.syncProjectsToCloud) {
                         window.EasyThereFirebase.syncProjectsToCloud(projects);
                     }
-                    actionBadgeText = `Created Project: "${data.action.title}"`;
-                } else if (data.action.type === "slack_message" && data.action.text) {
+                    actionBadgeText = `Created Project: "${doneData.action.title}"`;
+                } else if (doneData.action.type === "slack_message" && doneData.action.text) {
                     const slackData = getStoredSlackData();
                     if (slackData && slackData.mode === "token" && slackData.token && slackData.channelId) {
                         try {
@@ -1331,7 +1402,7 @@
                                     action: "send_message",
                                     token: slackData.token,
                                     channelId: slackData.channelId,
-                                    text: data.action.text
+                                    text: doneData.action.text
                                 })
                             });
                             const slackResData = await slackRes.json();
@@ -1351,7 +1422,7 @@
                                     method: "POST",
                                     mode: "no-cors",
                                     headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ text: data.action.text })
+                                    body: JSON.stringify({ text: doneData.action.text })
                                 });
                                 actionBadgeText = "Sent update to Slack";
                             } catch (e) {
@@ -1366,8 +1437,8 @@
 
             let memoryBadgeText = null;
 
-            if (data.newMemory && typeof data.newMemory === "string") {
-                const cleanMemory = data.newMemory.trim();
+            if (doneData && doneData.newMemory && typeof doneData.newMemory === "string") {
+                const cleanMemory = doneData.newMemory.trim();
                 if (cleanMemory && !memories.includes(cleanMemory)) {
                     memories.push(cleanMemory);
                     saveMemories();
@@ -1377,8 +1448,8 @@
                 }
             }
 
-            if (data.forgetMemory && typeof data.forgetMemory === "string") {
-                const query = data.forgetMemory.trim().toLowerCase();
+            if (doneData && doneData.forgetMemory && typeof doneData.forgetMemory === "string") {
+                const query = doneData.forgetMemory.trim().toLowerCase();
                 const prevCount = memories.length;
                 memories = memories.filter(function(m) {
                     return !m.toLowerCase().includes(query);
@@ -1387,23 +1458,17 @@
                     saveMemories();
                     renderMemoriesList();
                     updateInsights();
-                    memoryBadgeText = `Forgot: "${data.forgetMemory.trim()}"`;
+                    memoryBadgeText = `Forgot: "${doneData.forgetMemory.trim()}"`;
                 }
             }
 
-            const replyMessage = data.message || "Done.";
+            assistantMsg.content = accumulatedText;
+            assistantMsg.actionInfo = actionBadgeText;
+            assistantMsg.memoryInfo = memoryBadgeText;
+            assistantMsg.webSearchUsed = Boolean(doneData && doneData.webSearchUsed);
 
-            active.messages.push({
-                role: "assistant",
-                content: replyMessage,
-                time: getCurrentTime(),
-                actionInfo: actionBadgeText,
-                memoryInfo: memoryBadgeText,
-                webSearchUsed: Boolean(data.webSearchUsed)
-            });
-
-            if (!active.isTitleCustom && data.chatTitle) {
-                const cleanedTitle = sanitizeChatTitle(data.chatTitle);
+            if (!active.isTitleCustom && doneData && doneData.chatTitle) {
+                const cleanedTitle = sanitizeChatTitle(doneData.chatTitle);
                 if (cleanedTitle) {
                     active.title = cleanedTitle;
                 }
@@ -1415,15 +1480,10 @@
             renderActiveChat();
             updateInsights();
         } catch (err) {
-            active.messages.push({
-                role: "assistant",
-                content: "Unable to reach Easy There AI service. Please verify your connection.",
-                time: getCurrentTime(),
-                action: null
-            });
+            assistantMsg.content = "Unable to reach Easy There AI service. Please verify your connection.";
             active.updatedAt = new Date().toISOString();
             saveChats();
-            renderActiveChatMessages();
+            renderActiveChat();
         } finally {
             setLoading(false);
             if (inputEl) inputEl.focus();
