@@ -142,10 +142,13 @@ function updateGitHubUI() {
         }
         if (ghPreview && Array.isArray(data.repos) && data.repos.length > 0) {
             ghPreview.classList.remove("hidden");
-            ghPreview.innerHTML = data.repos.slice(0, 5).map(r => `
+            ghPreview.innerHTML = data.repos.slice(0, 8).map(r => `
                 <div class="github-repo-chip">
-                    <span class="github-repo-name">${r.name}</span>
-                    <span class="github-repo-desc">${r.description ? r.description.slice(0, 50) : 'No description'}</span>
+                    <div class="github-repo-top">
+                        <span class="github-repo-name">${r.name}</span>
+                        <span class="github-repo-meta">${r.language || 'Code'}${r.stars ? ` ★${r.stars}` : ''}</span>
+                    </div>
+                    <span class="github-repo-desc">${r.description ? r.description.slice(0, 60) : 'No description'}</span>
                 </div>
             `).join("");
         }
