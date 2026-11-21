@@ -267,6 +267,37 @@ async function fetchAiSettingsFromCloud() {
     return null;
 }
 
+async function syncIntegrationsToCloud(integrations) {
+    const database = getDb();
+    if (!database || !currentUser) return;
+    try {
+        await database.collection("users").doc(currentUser.uid).set({
+            integrations: integrations,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+    } catch (e) {
+        if (e && (e.code === "unavailable" || String(e).includes("BLOCKED"))) {
+            db = null;
+        }
+    }
+}
+
+async function fetchIntegrationsFromCloud() {
+    const database = getDb();
+    if (!database || !currentUser) return null;
+    try {
+        const doc = await database.collection("users").doc(currentUser.uid).get();
+        if (doc.exists && doc.data().integrations) {
+            return doc.data().integrations;
+        }
+    } catch (e) {
+        if (e && (e.code === "unavailable" || String(e).includes("BLOCKED"))) {
+            db = null;
+        }
+    }
+    return null;
+}
+
 function parseGoogleEvents(items) {
     const events = {};
     if (!Array.isArray(items)) return events;
@@ -383,6 +414,8 @@ window.EasyThereFirebase = {
     fetchChatsFromCloud: fetchChatsFromCloud,
     syncAiSettingsToCloud: syncAiSettingsToCloud,
     fetchAiSettingsFromCloud: fetchAiSettingsFromCloud,
+    syncIntegrationsToCloud: syncIntegrationsToCloud,
+    fetchIntegrationsFromCloud: fetchIntegrationsFromCloud,
     connectGoogleCalendar: connectGoogleCalendar,
     refreshGoogleCalendar: refreshGoogleCalendar,
     disconnectGoogleCalendar: disconnectGoogleCalendar,

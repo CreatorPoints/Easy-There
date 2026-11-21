@@ -46,6 +46,20 @@
     const submitBtn = document.getElementById("ai-chat-submit");
     const sendIcon = submitBtn ? submitBtn.querySelector(".ai-chat-send-icon") : null;
     const spinner = document.getElementById("ai-chat-spinner");
+    const searchToggleBtn = document.getElementById("ai-search-toggle-btn");
+    let isWebSearchEnabled = localStorage.getItem("easy_there_ai_web_search") === "true";
+    let currentUtterance = null;
+    let currentSpeakingBtn = null;
+
+    if (window.mermaid) {
+        try {
+            window.mermaid.initialize({
+                startOnLoad: false,
+                theme: "dark",
+                securityLevel: "loose"
+            });
+        } catch (e) {}
+    }
 
     const insightToday = document.getElementById("ai-insight-today");
     const insightTasks = document.getElementById("ai-insight-tasks");
@@ -186,6 +200,211 @@
                 memories: memories
             });
         }
+    }
+
+    function getStoredGitHubData() {
+        try {
+            const raw = localStorage.getItem("easy_there_github_data");
+            return raw ? JSON.parse(raw) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function getStoredSlackWebhook() {
+        return localStorage.getItem("easy_there_slack_webhook") || null;
+    }
+
+    function updateSearchToggleUI() {
+        if (!searchToggleBtn) return;
+        if (isWebSearchEnabled) {
+            searchToggleBtn.classList.add("active");
+        } else {
+            searchToggleBtn.classList.remove("active");
+        }
+    }
+
+    function resetSpeakBtn(btn) {
+        if (!btn) return;
+        btn.innerHTML = `
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+            <span>Listen</span>
+        `;
+    }
+
+    function toggleSpeech(text, btn) {
+        if (!window.speechSynthesis) return;
+        if (window.speechSynthesis.speaking) {
+            window.speechSynthesis.cancel();
+            if (currentSpeakingBtn) {
+                resetSpeakBtn(currentSpeakingBtn);
+            }
+            if (currentSpeakingBtn === btn) {
+                currentSpeakingBtn = null;
+                return;
+            }
+        }
+        const cleanText = String(text || "")
+            .replace(/<[^>]+>/g, " ")
+            .replace(/[`*#$]/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+        if (!cleanText) return;
+
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        currentSpeakingBtn = btn;
+        btn.innerHTML = `
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="6" y="4" width="4" height="16"></rect>
+                <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
+            <span>Stop</span>
+        `;
+        utterance.onend = function() {
+            resetSpeakBtn(btn);
+            currentSpeakingBtn = null;
+        };
+        utterance.onerror = function() {
+            resetSpeakBtn(btn);
+            currentSpeakingBtn = null;
+        };
+        window.speechSynthesis.speak(utterance);
+    }
+
+    function renderRichAssistantContent(rawText, container) {
+        if (!rawText || !container) return;
+
+        const mathTokens = [];
+        let processed = String(rawText).replace(/\$\$([\s\S]*?)\$\$/g, function(match, expr) {
+            const token = `@@MATH_BLOCK_${mathTokens.length}@@`;
+            mathTokens.push({ token: token, expr: expr.trim(), display: true });
+            return token;
+        });
+
+        processed = processed.replace(/(^|[^\\])\$([^\s\$](?:[^\$]*?[^\s\$])?)\$/g, function(match, prefix, expr) {
+            const token = `@@MATH_INLINE_${mathTokens.length}@@`;
+            mathTokens.push({ token: token, expr: expr.trim(), display: false });
+            return prefix + token;
+        });
+
+        let html = "";
+        if (window.marked && typeof window.marked.parse === "function") {
+            html = window.marked.parse(processed, { breaks: true, gfm: true });
+        } else {
+            html = escapeHtml(processed).replace(/\n/g, "<br>");
+        }
+
+        mathTokens.forEach(function(item) {
+            let renderedMath = "";
+            if (window.katex && typeof window.katex.renderToString === "function") {
+                try {
+                    renderedMath = window.katex.renderToString(item.expr, {
+                        displayMode: item.display,
+                        throwOnError: false
+                    });
+                } catch (e) {
+                    renderedMath = escapeHtml(item.display ? `$$${item.expr}$$` : `$${item.expr}$`);
+                }
+            } else {
+                renderedMath = escapeHtml(item.display ? `$$${item.expr}$$` : `$${item.expr}$`);
+            }
+            html = html.replace(item.token, renderedMath);
+        });
+
+        container.innerHTML = html;
+
+        const mermaidCodes = container.querySelectorAll("pre code.language-mermaid, pre code[class*='language-mermaid']");
+        if (mermaidCodes.length > 0) {
+            mermaidCodes.forEach(function(codeEl) {
+                const pre = codeEl.parentElement;
+                const diagramCode = codeEl.textContent.trim();
+                const mermaidDiv = document.createElement("div");
+                mermaidDiv.className = "mermaid-diagram";
+                mermaidDiv.textContent = diagramCode;
+                if (pre && pre.parentNode) {
+                    pre.parentNode.replaceChild(mermaidDiv, pre);
+                }
+            });
+
+            if (window.mermaid && typeof window.mermaid.run === "function") {
+                try {
+                    window.mermaid.run({
+                        nodes: container.querySelectorAll(".mermaid-diagram")
+                    });
+                } catch (err) {}
+            }
+        }
+
+        container.querySelectorAll("pre").forEach(function(pre) {
+            if (pre.parentElement && pre.parentElement.classList.contains("ai-code-wrapper")) return;
+            const code = pre.querySelector("code");
+            const rawCode = code ? code.textContent : pre.textContent;
+
+            let lang = "code";
+            if (code && code.className) {
+                const match = code.className.match(/language-([a-zA-Z0-9_-]+)/);
+                if (match && match[1]) {
+                    lang = match[1];
+                }
+            }
+
+            const wrapper = document.createElement("div");
+            wrapper.className = "ai-code-wrapper";
+
+            const header = document.createElement("div");
+            header.className = "ai-code-header";
+
+            const langBadge = document.createElement("span");
+            langBadge.className = "ai-code-lang";
+            langBadge.textContent = lang;
+
+            const copyBtn = document.createElement("button");
+            copyBtn.type = "button";
+            copyBtn.className = "ai-code-copy-btn";
+            copyBtn.setAttribute("aria-label", "Copy code");
+            copyBtn.innerHTML = `
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                <span>Copy</span>
+            `;
+
+            copyBtn.addEventListener("click", function() {
+                navigator.clipboard.writeText(rawCode).then(function() {
+                    copyBtn.innerHTML = `
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        <span>Copied!</span>
+                    `;
+                    setTimeout(function() {
+                        copyBtn.innerHTML = `
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            <span>Copy</span>
+                        `;
+                    }, 2000);
+                });
+            });
+
+            header.appendChild(langBadge);
+            header.appendChild(copyBtn);
+
+            pre.parentNode.insertBefore(wrapper, pre);
+            wrapper.appendChild(header);
+            wrapper.appendChild(pre);
+        });
+
+        container.querySelectorAll("a").forEach(function(anchor) {
+            anchor.setAttribute("target", "_blank");
+            anchor.setAttribute("rel", "noopener noreferrer");
+        });
     }
 
     function updateInsights() {
@@ -559,8 +778,26 @@
             if (msg.content) {
                 const bubble = document.createElement("div");
                 bubble.className = "ai-chat-bubble";
-                bubble.textContent = msg.content;
+                if (msg.role === "assistant") {
+                    renderRichAssistantContent(msg.content, bubble);
+                } else {
+                    bubble.textContent = msg.content;
+                }
                 bubbleWrap.appendChild(bubble);
+            }
+
+            if (msg.webSearchUsed) {
+                const searchBadge = document.createElement("div");
+                searchBadge.className = "ai-web-grounded-badge";
+                searchBadge.innerHTML = `
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                    </svg>
+                    <span>Grounded with Web Search</span>
+                `;
+                bubbleWrap.appendChild(searchBadge);
             }
 
             if (msg.actionInfo) {
@@ -585,6 +822,57 @@
                     <span>${escapeHtml(msg.memoryInfo)}</span>
                 `;
                 bubbleWrap.appendChild(memBadge);
+            }
+
+            if (msg.role === "assistant" && msg.content) {
+                const toolbar = document.createElement("div");
+                toolbar.className = "ai-message-toolbar";
+
+                const copyMsgBtn = document.createElement("button");
+                copyMsgBtn.type = "button";
+                copyMsgBtn.className = "ai-msg-action-btn";
+                copyMsgBtn.setAttribute("aria-label", "Copy message");
+                copyMsgBtn.innerHTML = `
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <span>Copy</span>
+                `;
+                copyMsgBtn.addEventListener("click", function() {
+                    navigator.clipboard.writeText(msg.content).then(function() {
+                        copyMsgBtn.innerHTML = `
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            <span>Copied!</span>
+                        `;
+                        setTimeout(function() {
+                            copyMsgBtn.innerHTML = `
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                <span>Copy</span>
+                            `;
+                        }, 2000);
+                    });
+                });
+                toolbar.appendChild(copyMsgBtn);
+
+                if (window.speechSynthesis) {
+                    const speakBtn = document.createElement("button");
+                    speakBtn.type = "button";
+                    speakBtn.className = "ai-msg-action-btn";
+                    speakBtn.setAttribute("aria-label", "Read aloud");
+                    resetSpeakBtn(speakBtn);
+                    speakBtn.addEventListener("click", function() {
+                        toggleSpeech(msg.content, speakBtn);
+                    });
+                    toolbar.appendChild(speakBtn);
+                }
+
+                bubbleWrap.appendChild(toolbar);
             }
 
             if (msg.time) {
@@ -931,6 +1219,9 @@
                 personality: personality,
                 customPersonality: customPersonality,
                 memories: memories,
+                webSearch: isWebSearchEnabled,
+                githubData: getStoredGitHubData(),
+                slackConnected: Boolean(getStoredSlackWebhook()),
                 file: fileToSend ? {
                     name: fileToSend.name,
                     size: fileToSend.size,
@@ -1015,6 +1306,23 @@
                         window.EasyThereFirebase.syncProjectsToCloud(projects);
                     }
                     actionBadgeText = `Created Project: "${data.action.title}"`;
+                } else if (data.action.type === "slack_message" && data.action.text) {
+                    const slackWebhook = getStoredSlackWebhook();
+                    if (slackWebhook) {
+                        try {
+                            await fetch(slackWebhook, {
+                                method: "POST",
+                                mode: "no-cors",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ text: data.action.text })
+                            });
+                            actionBadgeText = "Sent update to Slack";
+                        } catch (e) {
+                            actionBadgeText = "Failed to post to Slack";
+                        }
+                    } else {
+                        actionBadgeText = "Slack not connected in Integrations";
+                    }
                 }
             }
 
@@ -1052,7 +1360,8 @@
                 content: replyMessage,
                 time: getCurrentTime(),
                 actionInfo: actionBadgeText,
-                memoryInfo: memoryBadgeText
+                memoryInfo: memoryBadgeText,
+                webSearchUsed: Boolean(data.webSearchUsed)
             });
 
             if (!active.isTitleCustom && data.chatTitle) {
@@ -1089,6 +1398,16 @@
 
     if (panelNewChatBtn) {
         panelNewChatBtn.addEventListener("click", createNewChat);
+    }
+
+    if (searchToggleBtn) {
+        searchToggleBtn.addEventListener("click", function() {
+            isWebSearchEnabled = !isWebSearchEnabled;
+            try {
+                localStorage.setItem("easy_there_ai_web_search", String(isWebSearchEnabled));
+            } catch (e) {}
+            updateSearchToggleUI();
+        });
     }
 
     if (toggleChatsBtn) {
@@ -1298,6 +1617,7 @@
     renderMemoriesList();
     renderAttachedFilePreview();
     updateInsights();
+    updateSearchToggleUI();
     renderChatsList();
     renderActiveChat();
     if (inputEl) inputEl.focus();

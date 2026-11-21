@@ -83,6 +83,47 @@
                             <p id="gcal-feedback" class="feedback-msg"></p>
                         </div>
                     </div>
+                    <div class="integration-card" id="github-card">
+                        <div class="integration-header">
+                            <div class="integration-info">
+                                <h2>GitHub</h2>
+                                <p class="integration-desc">Connect your GitHub profile so Easy There AI has real-time context on your repositories, code, and commits.</p>
+                            </div>
+                            <span id="github-status-badge" class="status-badge disconnected">Disconnected</span>
+                        </div>
+                        <div class="integration-body">
+                            <form id="github-form" class="integration-form">
+                                <label for="github-username-input" class="conference-label">GitHub Username</label>
+                                <div class="integration-input-group">
+                                    <input type="text" id="github-username-input" class="conference-input" required autocomplete="off" aria-label="GitHub username">
+                                    <button type="submit" id="github-connect-btn" class="primary-btn">Connect</button>
+                                    <button type="button" id="github-disconnect-btn" class="secondary-btn hidden">Disconnect</button>
+                                </div>
+                            </form>
+                            <p id="github-feedback" class="feedback-msg"></p>
+                            <div id="github-repos-preview" class="github-repos-preview hidden"></div>
+                        </div>
+                    </div>
+                    <div class="integration-card" id="slack-card">
+                        <div class="integration-header">
+                            <div class="integration-info">
+                                <h2>Slack</h2>
+                                <p class="integration-desc">Connect an Incoming Webhook to let Easy There AI send meeting summaries, task updates, and notes to Slack.</p>
+                            </div>
+                            <span id="slack-status-badge" class="status-badge disconnected">Disconnected</span>
+                        </div>
+                        <div class="integration-body">
+                            <form id="slack-form" class="integration-form">
+                                <label for="slack-webhook-input" class="conference-label">Slack Incoming Webhook URL</label>
+                                <div class="integration-input-group">
+                                    <input type="url" id="slack-webhook-input" class="conference-input" required autocomplete="off" aria-label="Slack Webhook URL">
+                                    <button type="submit" id="slack-connect-btn" class="primary-btn">Save Webhook</button>
+                                    <button type="button" id="slack-disconnect-btn" class="secondary-btn hidden">Disconnect</button>
+                                </div>
+                            </form>
+                            <p id="slack-feedback" class="feedback-msg"></p>
+                        </div>
+                    </div>
                 </div>
             </main>
         </div>

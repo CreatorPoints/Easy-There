@@ -1,0 +1,9 @@
+Total md support with latex and flowcharts, basically what all ai can support
+it can search web
+knows all latest stuffs, as it didnt even knew whats a ysws
+use kinda good model but cheap
+can connect with github, slack and etc
+mcp? i dunno
+good looking
+when it thinks that user said it andd its important for me to keep in memory so yea
+and if i explicitly say then store too from the chat itseslf
