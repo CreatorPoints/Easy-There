@@ -216,16 +216,7 @@
             const raw = localStorage.getItem("easy_there_slack_data");
             if (raw) return JSON.parse(raw);
         } catch (e) {}
-        const webhook = localStorage.getItem("easy_there_slack_webhook");
-        if (webhook) {
-            return { webhook: webhook, channel: "", purpose: "" };
-        }
         return null;
-    }
-
-    function getStoredSlackWebhook() {
-        const data = getStoredSlackData();
-        return data ? data.webhook : (localStorage.getItem("easy_there_slack_webhook") || null);
     }
 
     function updateSearchToggleUI() {
@@ -1254,7 +1245,7 @@
                 memories: memories,
                 webSearch: isWebSearchEnabled,
                 githubData: getStoredGitHubData(),
-                slackConnected: Boolean(getStoredSlackData()),
+                slackConnected: Boolean(getStoredSlackData() && getStoredSlackData().token),
                 slackData: getStoredSlackData(),
                 file: fileToSend ? {
                     name: fileToSend.name,
@@ -1393,7 +1384,7 @@
                     actionBadgeText = `Created Project: "${doneData.action.title}"`;
                 } else if (doneData.action.type === "slack_message" && doneData.action.text) {
                     const slackData = getStoredSlackData();
-                    if (slackData && slackData.mode === "token" && slackData.token && slackData.channelId) {
+                    if (slackData && slackData.token && slackData.channelId) {
                         try {
                             const slackRes = await fetch("/api/slack", {
                                 method: "POST",
@@ -1415,22 +1406,7 @@
                             actionBadgeText = "Failed to post to Slack API";
                         }
                     } else {
-                        const slackWebhook = getStoredSlackWebhook();
-                        if (slackWebhook) {
-                            try {
-                                await fetch(slackWebhook, {
-                                    method: "POST",
-                                    mode: "no-cors",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ text: doneData.action.text })
-                                });
-                                actionBadgeText = "Sent update to Slack";
-                            } catch (e) {
-                                actionBadgeText = "Failed to post to Slack";
-                            }
-                        } else {
-                            actionBadgeText = "Slack not connected in Integrations";
-                        }
+                        actionBadgeText = "Slack not connected in Integrations";
                     }
                 }
             }

@@ -221,47 +221,45 @@ module.exports = async function handler(req, res) {
     const webSearchText = formatWebResults(webSearchResults);
 
     let slackInfo = 'Disconnected.';
-    if (slackData && (slackData.token || slackData.webhook)) {
+    if (slackData && slackData.token && slackData.channelId) {
         let ch = slackData.channel ? slackData.channel : 'Slack';
         let topic = slackData.topic || slackData.purpose || '';
         let purpose = slackData.purpose || '';
         let pinned = Array.isArray(slackData.pinnedMessages) ? slackData.pinnedMessages : [];
         let messages = Array.isArray(slackData.recentMessages) ? slackData.recentMessages : [];
 
-        if (slackData.mode === 'token' && slackData.token && slackData.channelId) {
-            const cleanToken = slackData.token.trim();
-            const cleanChannel = slackData.channelId.trim();
-            try {
-                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000));
-                const fetchPromise = Promise.all([
-                    fetch(`https://slack.com/api/conversations.info?channel=${encodeURIComponent(cleanChannel)}`, {
-                        headers: { 'Authorization': `Bearer ${cleanToken}`, 'Content-Type': 'application/json' }
-                    }).then(r => r.json()).catch(() => null),
-                    fetch(`https://slack.com/api/conversations.history?channel=${encodeURIComponent(cleanChannel)}&limit=25`, {
-                        headers: { 'Authorization': `Bearer ${cleanToken}`, 'Content-Type': 'application/json' }
-                    }).then(r => r.json()).catch(() => null),
-                    fetch(`https://slack.com/api/pins.list?channel=${encodeURIComponent(cleanChannel)}`, {
-                        headers: { 'Authorization': `Bearer ${cleanToken}`, 'Content-Type': 'application/json' }
-                    }).then(r => r.json()).catch(() => null)
-                ]);
+        const cleanToken = slackData.token.trim();
+        const cleanChannel = slackData.channelId.trim();
+        try {
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000));
+            const fetchPromise = Promise.all([
+                fetch(`https://slack.com/api/conversations.info?channel=${encodeURIComponent(cleanChannel)}`, {
+                    headers: { 'Authorization': `Bearer ${cleanToken}`, 'Content-Type': 'application/json' }
+                }).then(r => r.json()).catch(() => null),
+                fetch(`https://slack.com/api/conversations.history?channel=${encodeURIComponent(cleanChannel)}&limit=25`, {
+                    headers: { 'Authorization': `Bearer ${cleanToken}`, 'Content-Type': 'application/json' }
+                }).then(r => r.json()).catch(() => null),
+                fetch(`https://slack.com/api/pins.list?channel=${encodeURIComponent(cleanChannel)}`, {
+                    headers: { 'Authorization': `Bearer ${cleanToken}`, 'Content-Type': 'application/json' }
+                }).then(r => r.json()).catch(() => null)
+            ]);
 
-                const [liveInfo, liveHistory, livePins] = await Promise.race([fetchPromise, timeoutPromise]);
-                if (liveInfo && liveInfo.ok && liveInfo.channel) {
-                    ch = liveInfo.channel.name ? `#${liveInfo.channel.name}` : ch;
-                    if (liveInfo.channel.topic?.value) topic = liveInfo.channel.topic.value;
-                    if (liveInfo.channel.purpose?.value) purpose = liveInfo.channel.purpose.value;
-                }
-                if (livePins && livePins.ok && Array.isArray(livePins.items)) {
-                    const extractedPins = livePins.items
-                        .filter(it => it.type === 'message' && it.message && it.message.text)
-                        .map(it => it.message.text.slice(0, 800));
-                    if (extractedPins.length > 0) pinned = extractedPins;
-                }
-                if (liveHistory && liveHistory.ok && Array.isArray(liveHistory.messages)) {
-                    messages = liveHistory.messages.map(m => (m.text || '').slice(0, 500)).filter(Boolean);
-                }
-            } catch (liveErr) {}
-        }
+            const [liveInfo, liveHistory, livePins] = await Promise.race([fetchPromise, timeoutPromise]);
+            if (liveInfo && liveInfo.ok && liveInfo.channel) {
+                ch = liveInfo.channel.name ? `#${liveInfo.channel.name}` : ch;
+                if (liveInfo.channel.topic?.value) topic = liveInfo.channel.topic.value;
+                if (liveInfo.channel.purpose?.value) purpose = liveInfo.channel.purpose.value;
+            }
+            if (livePins && livePins.ok && Array.isArray(livePins.items)) {
+                const extractedPins = livePins.items
+                    .filter(it => it.type === 'message' && it.message && it.message.text)
+                    .map(it => it.message.text.slice(0, 800));
+                if (extractedPins.length > 0) pinned = extractedPins;
+            }
+            if (liveHistory && liveHistory.ok && Array.isArray(liveHistory.messages)) {
+                messages = liveHistory.messages.map(m => (m.text || '').slice(0, 500)).filter(Boolean);
+            }
+        } catch (liveErr) {}
 
         const lines = [`Connected to ${ch}`];
         if (topic) lines.push(`Topic: "${topic}"`);
@@ -273,8 +271,6 @@ module.exports = async function handler(req, res) {
             lines.push(`Recent Channel Messages:\n${messages.slice(0, 20).map(m => typeof m === 'string' ? m : `${m.user || 'User'}: ${m.text || ''}`).join('\n')}`);
         }
         slackInfo = lines.join('\n');
-    } else if (slackConnected) {
-        slackInfo = 'Connected via Slack Incoming Webhook.';
     }
 
     const systemPrompt = `You are Easy There AI, assistant embedded in user's personal planner.
@@ -309,7 +305,7 @@ Rules:
 - Schedule event: action {type: "create_event", title, date, time, startMinutes, endMinutes}.
 - Add to-do: action {type: "create_todo", text}.
 - Add project: action {type: "create_project", title, description}.
-- Slack: action {type: "slack_message", text} if connected, else prompt to connect in Integrations tab. When user asks what the Slack channel is about or what channel you post to, state the channel name, topic, and purpose directly from the Slack context above or saved memories. If no channel details are configured yet, explain how they can connect via Bot Token (Auto-Fetch) or set the channel info in Integrations; when the user tells you in chat, store it in newMemory (e.g. "Slack channel is #name: used for X") so you permanently remember it.
+- Slack: action {type: "slack_message", text} if connected, else prompt to connect in Integrations tab. When user asks what the Slack channel is about or what channel you post to, state the channel name, topic, and purpose directly from the Slack context above or saved memories. If not connected, explain how they can connect in the Integrations tab using their Slack Bot User Token; when the user tells you in chat, store it in newMemory (e.g. "Slack channel is #name: used for X") so you permanently remember it.
 4. Memory: Auto-extract important user facts/preferences into newMemory, or when explicitly commanded ("remember ..."). If asked to forget, set forgetMemory.
 5. Markdown: Use bold, lists, tables, LaTeX math, and Mermaid flowcharts. If live web search used, cite sources with Markdown links and set webSearchUsed: true.`;
 

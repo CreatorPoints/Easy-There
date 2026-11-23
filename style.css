@@ -811,39 +811,6 @@ h2 {
     }
 }
 
-.slack-mode-tabs {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 14px;
-    background-color: #0c0c0c;
-    padding: 4px;
-    border-radius: 6px;
-    border: 1px solid #1a1a1a;
-}
-
-.slack-mode-tab {
-    flex: 1;
-    background: transparent;
-    border: none;
-    color: #888888;
-    padding: 6px 12px;
-    border-radius: 4px;
-    font-size: 0.8rem;
-    font-family: 'Poppins', sans-serif;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.slack-mode-tab:hover {
-    color: #ffffff;
-}
-
-.slack-mode-tab.active {
-    background-color: #1a1a1a;
-    color: #ffffff;
-    font-weight: 500;
-}
-
 .slack-channel-card {
     background-color: #080808;
     border: 1px solid #1a1a1a;

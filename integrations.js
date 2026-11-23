@@ -107,19 +107,11 @@ const ghStatusBadge = document.getElementById("github-status-badge");
 const ghFeedback = document.getElementById("github-feedback");
 const ghPreview = document.getElementById("github-repos-preview");
 
-const slackModeTokenBtn = document.getElementById("slack-mode-token-btn");
-const slackModeWebhookBtn = document.getElementById("slack-mode-webhook-btn");
 const slackTokenForm = document.getElementById("slack-token-form");
 const slackTokenInput = document.getElementById("slack-token-input");
 const slackChannelIdInput = document.getElementById("slack-channel-id-input");
 const slackTokenSubmitBtn = document.getElementById("slack-token-submit-btn");
 const slackTokenDisconnectBtn = document.getElementById("slack-token-disconnect-btn");
-const slackWebhookForm = document.getElementById("slack-webhook-form");
-const slackWebhookInput = document.getElementById("slack-webhook-input");
-const slackChannelInput = document.getElementById("slack-channel-input");
-const slackPurposeInput = document.getElementById("slack-purpose-input");
-const slackWebhookSubmitBtn = document.getElementById("slack-webhook-submit-btn");
-const slackWebhookDisconnectBtn = document.getElementById("slack-webhook-disconnect-btn");
 const slackStatusBadge = document.getElementById("slack-status-badge");
 const slackFeedback = document.getElementById("slack-feedback");
 const slackChannelDetails = document.getElementById("slack-channel-details");
@@ -138,20 +130,7 @@ function getStoredSlackData() {
         const raw = localStorage.getItem("easy_there_slack_data");
         if (raw) return JSON.parse(raw);
     } catch (e) {}
-    const webhook = localStorage.getItem("easy_there_slack_webhook");
-    if (webhook) {
-        return {
-            webhook: webhook,
-            channel: "",
-            purpose: ""
-        };
-    }
     return null;
-}
-
-function getStoredSlackWebhook() {
-    const data = getStoredSlackData();
-    return data ? data.webhook : (localStorage.getItem("easy_there_slack_webhook") || "");
 }
 
 function updateGitHubUI() {
@@ -196,36 +175,15 @@ function updateGitHubUI() {
 function updateSlackUI() {
     if (!slackStatusBadge) return;
     const data = getStoredSlackData();
-    if (data && (data.webhook || data.token)) {
+    if (data && data.token) {
         slackStatusBadge.textContent = data.channel ? data.channel : "Connected";
         slackStatusBadge.className = "status-badge connected";
-
-        if (data.mode === "token" && data.token) {
-            if (slackTokenInput) slackTokenInput.value = data.token;
-            if (slackChannelIdInput) slackChannelIdInput.value = data.channelId || "";
-            if (slackTokenDisconnectBtn) slackTokenDisconnectBtn.classList.remove("hidden");
-            if (slackWebhookDisconnectBtn) slackWebhookDisconnectBtn.classList.add("hidden");
-            if (slackModeTokenBtn && slackModeWebhookBtn) {
-                slackModeTokenBtn.classList.add("active");
-                slackModeWebhookBtn.classList.remove("active");
-                if (slackTokenForm) slackTokenForm.classList.remove("hidden");
-                if (slackWebhookForm) slackWebhookForm.classList.add("hidden");
-            }
-        } else {
-            if (slackWebhookInput) slackWebhookInput.value = data.webhook || "";
-            if (slackChannelInput) slackChannelInput.value = data.channel || "";
-            if (slackPurposeInput) slackPurposeInput.value = data.purpose || "";
-            if (slackWebhookDisconnectBtn) slackWebhookDisconnectBtn.classList.remove("hidden");
-            if (slackTokenDisconnectBtn) slackTokenDisconnectBtn.classList.add("hidden");
-        }
+        if (slackTokenInput) slackTokenInput.value = data.token;
+        if (slackChannelIdInput) slackChannelIdInput.value = data.channelId || "";
+        if (slackTokenDisconnectBtn) slackTokenDisconnectBtn.classList.remove("hidden");
 
         if (slackFeedback) {
-            if (data.mode === "token") {
-                slackFeedback.textContent = `Connected to ${data.channel || 'Slack'} via Bot API. Live topic and messages enabled.`;
-            } else {
-                const extra = data.purpose ? ` (${data.purpose})` : "";
-                slackFeedback.textContent = `Slack webhook active for ${data.channel || 'channel'}${extra}. Ready for AI messages.`;
-            }
+            slackFeedback.textContent = `Connected to ${data.channel || 'Slack'} via Bot API. Live topic and messages enabled.`;
             slackFeedback.style.color = "#4ade80";
         }
 
@@ -235,7 +193,7 @@ function updateSlackUI() {
             const purposeText = data.purpose ? `<div class="slack-channel-purpose">Purpose: ${data.purpose}</div>` : "";
             const pinsCount = Array.isArray(data.pinnedMessages) && data.pinnedMessages.length > 0 ? ` • ${data.pinnedMessages.length} pinned` : "";
             const msgsCount = Array.isArray(data.recentMessages) && data.recentMessages.length > 0 ? ` • ${data.recentMessages.length} messages loaded` : "";
-            const membersText = data.numMembers ? `<span class="slack-channel-meta">${data.numMembers} members${pinsCount}${msgsCount}</span>` : `<span class="slack-channel-meta">${data.mode === 'token' ? 'Bot API' : 'Webhook'}${pinsCount}${msgsCount}</span>`;
+            const membersText = data.numMembers ? `<span class="slack-channel-meta">${data.numMembers} members${pinsCount}${msgsCount}</span>` : `<span class="slack-channel-meta">Bot API${pinsCount}${msgsCount}</span>`;
             slackChannelDetails.innerHTML = `
                 <div class="slack-channel-top">
                     <span class="slack-channel-name">${data.channel || 'Slack Channel'}</span>
@@ -250,11 +208,7 @@ function updateSlackUI() {
         slackStatusBadge.className = "status-badge disconnected";
         if (slackTokenInput) slackTokenInput.value = "";
         if (slackChannelIdInput) slackChannelIdInput.value = "";
-        if (slackWebhookInput) slackWebhookInput.value = "";
-        if (slackChannelInput) slackChannelInput.value = "";
-        if (slackPurposeInput) slackPurposeInput.value = "";
         if (slackTokenDisconnectBtn) slackTokenDisconnectBtn.classList.add("hidden");
-        if (slackWebhookDisconnectBtn) slackWebhookDisconnectBtn.classList.add("hidden");
         if (slackFeedback) slackFeedback.textContent = "";
         if (slackChannelDetails) {
             slackChannelDetails.classList.add("hidden");
@@ -294,7 +248,7 @@ async function connectGitHub(username) {
         if (window.EasyThereFirebase && window.EasyThereFirebase.syncIntegrationsToCloud) {
             window.EasyThereFirebase.syncIntegrationsToCloud({
                 github: ghData,
-                slackWebhook: getStoredSlackWebhook()
+                slackData: getStoredSlackData()
             });
         }
         updateGitHubUI();
@@ -311,7 +265,7 @@ function disconnectGitHub() {
     if (window.EasyThereFirebase && window.EasyThereFirebase.syncIntegrationsToCloud) {
         window.EasyThereFirebase.syncIntegrationsToCloud({
             github: null,
-            slackWebhook: getStoredSlackWebhook()
+            slackData: getStoredSlackData()
         });
     }
     updateGitHubUI();
@@ -378,7 +332,6 @@ async function connectSlackBot(token, channelId) {
         if (window.EasyThereFirebase && window.EasyThereFirebase.syncIntegrationsToCloud) {
             window.EasyThereFirebase.syncIntegrationsToCloud({
                 github: getStoredGitHubData(),
-                slackWebhook: null,
                 slackData: slackData
             });
         }
@@ -392,43 +345,12 @@ async function connectSlackBot(token, channelId) {
     }
 }
 
-function connectSlackWebhook(url, channel, purpose) {
-    const cleanUrl = (url || "").trim();
-    if (!cleanUrl.startsWith("https://hooks.slack.com/")) {
-        if (slackFeedback) {
-            slackFeedback.textContent = "Invalid Slack Webhook URL. It must start with https://hooks.slack.com/";
-            slackFeedback.style.color = "#f87171";
-        }
-        return;
-    }
-
-    const slackData = {
-        mode: "webhook",
-        webhook: cleanUrl,
-        channel: (channel || "").trim(),
-        purpose: (purpose || "").trim()
-    };
-
-    localStorage.setItem("easy_there_slack_webhook", cleanUrl);
-    localStorage.setItem("easy_there_slack_data", JSON.stringify(slackData));
-
-    if (window.EasyThereFirebase && window.EasyThereFirebase.syncIntegrationsToCloud) {
-        window.EasyThereFirebase.syncIntegrationsToCloud({
-            github: getStoredGitHubData(),
-            slackWebhook: cleanUrl,
-            slackData: slackData
-        });
-    }
-    updateSlackUI();
-}
-
 function disconnectSlack() {
     localStorage.removeItem("easy_there_slack_webhook");
     localStorage.removeItem("easy_there_slack_data");
     if (window.EasyThereFirebase && window.EasyThereFirebase.syncIntegrationsToCloud) {
         window.EasyThereFirebase.syncIntegrationsToCloud({
             github: getStoredGitHubData(),
-            slackWebhook: null,
             slackData: null
         });
     }
@@ -448,22 +370,6 @@ if (ghDisconnectBtn) {
     ghDisconnectBtn.addEventListener("click", disconnectGitHub);
 }
 
-if (slackModeTokenBtn && slackModeWebhookBtn) {
-    slackModeTokenBtn.addEventListener("click", function() {
-        slackModeTokenBtn.classList.add("active");
-        slackModeWebhookBtn.classList.remove("active");
-        if (slackTokenForm) slackTokenForm.classList.remove("hidden");
-        if (slackWebhookForm) slackWebhookForm.classList.add("hidden");
-    });
-
-    slackModeWebhookBtn.addEventListener("click", function() {
-        slackModeWebhookBtn.classList.add("active");
-        slackModeTokenBtn.classList.remove("active");
-        if (slackWebhookForm) slackWebhookForm.classList.remove("hidden");
-        if (slackTokenForm) slackTokenForm.classList.add("hidden");
-    });
-}
-
 if (slackTokenForm) {
     slackTokenForm.addEventListener("submit", function(e) {
         e.preventDefault();
@@ -477,21 +383,6 @@ if (slackTokenDisconnectBtn) {
     slackTokenDisconnectBtn.addEventListener("click", disconnectSlack);
 }
 
-if (slackWebhookForm) {
-    slackWebhookForm.addEventListener("submit", function(e) {
-        e.preventDefault();
-        if (slackWebhookInput) {
-            const channelVal = slackChannelInput ? slackChannelInput.value : "";
-            const purposeVal = slackPurposeInput ? slackPurposeInput.value : "";
-            connectSlackWebhook(slackWebhookInput.value, channelVal, purposeVal);
-        }
-    });
-}
-
-if (slackWebhookDisconnectBtn) {
-    slackWebhookDisconnectBtn.addEventListener("click", disconnectSlack);
-}
-
 if (window.EasyThereFirebase) {
     window.EasyThereFirebase.onUserChanged(async function(user) {
         updateFirebaseUI(user);
@@ -503,11 +394,6 @@ if (window.EasyThereFirebase) {
                 }
                 if (cloudIntegrations.slackData) {
                     localStorage.setItem("easy_there_slack_data", JSON.stringify(cloudIntegrations.slackData));
-                    if (cloudIntegrations.slackData.webhook) {
-                        localStorage.setItem("easy_there_slack_webhook", cloudIntegrations.slackData.webhook);
-                    }
-                } else if (cloudIntegrations.slackWebhook) {
-                    localStorage.setItem("easy_there_slack_webhook", cloudIntegrations.slackWebhook);
                 }
                 updateGitHubUI();
                 updateSlackUI();
