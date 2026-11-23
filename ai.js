@@ -219,6 +219,19 @@
         return null;
     }
 
+    function getStoredMailData() {
+        if (localStorage.getItem("easy_there_mail_disconnected") === "true") {
+            return null;
+        }
+        try {
+            const raw = localStorage.getItem("easy_there_mail_data");
+            if (raw) return JSON.parse(raw);
+        } catch (e) {}
+        return {
+            token: "th_apk_live_3cN2XKOQW1PVXnF8r0FVyFaRUGn4dK10w4rq"
+        };
+    }
+
     function updateSearchToggleUI() {
         if (!searchToggleBtn) return;
         if (isWebSearchEnabled) {
@@ -1247,6 +1260,7 @@
                 githubData: getStoredGitHubData(),
                 slackConnected: Boolean(getStoredSlackData() && getStoredSlackData().token),
                 slackData: getStoredSlackData(),
+                mailData: getStoredMailData(),
                 file: fileToSend ? {
                     name: fileToSend.name,
                     size: fileToSend.size,

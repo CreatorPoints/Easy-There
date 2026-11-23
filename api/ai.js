@@ -1,3 +1,6 @@
+const https = require('node:https');
+const dns = require('node:dns');
+
 module.exports = async function handler(req, res) {
     if (req.method !== 'POST') {
         res.setHeader('Allow', 'POST');
@@ -30,7 +33,8 @@ module.exports = async function handler(req, res) {
         webSearch,
         githubData,
         slackConnected,
-        slackData
+        slackData,
+        mailData
     } = req.body || {};
 
     if ((!prompt || typeof prompt !== 'string' || !prompt.trim()) && (!file || typeof file !== 'object')) {
@@ -96,6 +100,52 @@ module.exports = async function handler(req, res) {
         } catch (e) {}
 
         return results;
+    }
+
+    async function fetchTheseus(path, token) {
+        let ip = 'mail.hackclub.com';
+        try {
+            const addrs = await dns.promises.resolve4('mail.hackclub.com');
+            if (!addrs || !addrs[0] || addrs[0] === '0.0.0.0' || addrs[0].startsWith('127.')) {
+                ip = '104.18.28.137';
+            } else {
+                ip = addrs[0];
+            }
+        } catch (e) {
+            ip = '104.18.28.137';
+        }
+
+        return new Promise((resolve, reject) => {
+            const req = https.request({
+                host: ip,
+                port: 443,
+                path: path,
+                method: 'GET',
+                headers: {
+                    'Host': 'mail.hackclub.com',
+                    'Authorization': `Bearer ${token}`,
+                    'User-Agent': 'EasyThere/1.0',
+                    'Accept': 'application/json'
+                },
+                servername: 'mail.hackclub.com',
+                timeout: 3500
+            }, (res) => {
+                let raw = '';
+                res.on('data', chunk => raw += chunk);
+                res.on('end', () => {
+                    try {
+                        resolve({ status: res.statusCode, data: JSON.parse(raw) });
+                    } catch (err) {
+                        resolve({ status: res.statusCode, data: null });
+                    }
+                });
+            });
+            req.on('error', reject);
+            req.on('timeout', () => {
+                req.destroy(new Error('Request timeout'));
+            });
+            req.end();
+        });
     }
 
     const isMeetingQuery = /(\btranscript\b|\bmeeting\b|\bcall\b|\brecap\b|\bconference\b|\bdiscussed\b|\btalked about\b)/i.test(sanitizedPrompt);
@@ -273,6 +323,44 @@ module.exports = async function handler(req, res) {
         slackInfo = lines.join('\n');
     }
 
+    let mailInfo = 'Disconnected.';
+    if (mailData && mailData.token) {
+        let letters = Array.isArray(mailData.mail) ? mailData.mail : [];
+        let packages = Array.isArray(mailData.packages) ? mailData.packages : [];
+        const cleanMailToken = mailData.token.trim();
+
+        try {
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500));
+            const mailFetchPromise = Promise.all([
+                fetchTheseus('/api/public/v1/mail', cleanMailToken).catch(() => null),
+                fetchTheseus('/api/public/v1/packages', cleanMailToken).catch(() => null)
+            ]);
+            const [liveMailRes, livePkgRes] = await Promise.race([mailFetchPromise, timeoutPromise]);
+            if (liveMailRes && liveMailRes.status === 200 && Array.isArray(liveMailRes.data?.mail)) {
+                letters = liveMailRes.data.mail;
+            }
+            if (livePkgRes && livePkgRes.status === 200 && Array.isArray(livePkgRes.data?.packages)) {
+                packages = livePkgRes.data.packages;
+            }
+        } catch (mailErr) {}
+
+        const allItems = [...letters, ...packages];
+        if (allItems.length === 0) {
+            mailInfo = 'Connected to Hack Club Mail (No letters or shipments found).';
+        } else {
+            const lines = [`Connected to Hack Club Mail (${allItems.length} active item${allItems.length > 1 ? 's' : ''}):`];
+            allItems.forEach(item => {
+                const title = item.title || item.id || 'Letter';
+                const status = (item.status || 'unknown').toUpperCase();
+                const tags = Array.isArray(item.tags) && item.tags.length > 0 ? ` [${item.tags.join(', ')}]` : '';
+                const date = (item.created_at || '').slice(0, 10);
+                const url = item.public_url ? ` (${item.public_url})` : '';
+                lines.push(`- [${status}] ${title}${tags}${date ? ` ordered/queued on ${date}` : ''}${url}`);
+            });
+            mailInfo = lines.join('\n');
+        }
+    }
+
     const systemPrompt = `You are Easy There AI, assistant embedded in user's personal planner.
 Tone: ${personalityInstruction}
 Context: Date: ${todayVal} (${currentDayOfWeek || ''}), Time: ${currentTime || ''}, Timezone: ${timezone || 'UTC'}, Page: ${currentPage || 'Planner'}${selectedDate ? `, SelectedDate: ${selectedDate}` : ''}
@@ -280,6 +368,7 @@ Context: Date: ${todayVal} (${currentDayOfWeek || ''}), Time: ${currentTime || '
 Domain Knowledge:
 - Hack Club: global nonprofit for high school coders founded by Zach Latta.
 - YSWS ("You Ship, We Ship"): ship real projects, get free hardware/grants. Programs: Blot (art/plotter robot), Sprig (JS tile console), OnBoard ($100 custom PCB), Boreal, Nest (Linux accounts), Arcade & High Seas (hours to prizes), Juice, Outernet, Hack Club Bank.
+- Hack Club Mail (Theseus): mail and warehouse shipment system (mail.hackclub.com) for sending letters, stickers, and physical rewards for YSWS programs.
 
 User State:
 - Memories: ${memoriesText}
@@ -288,6 +377,7 @@ User State:
 - Projects: ${projectsText}
 - GitHub: ${githubText}
 - Slack: ${slackInfo}
+- Hack Club Mail & Shipments: ${mailInfo}
 - Transcripts: ${transcriptsText}
 ${webSearchText ? `\nLive Search Results:\n${webSearchText}\n` : ''}
 Rules:
@@ -300,7 +390,7 @@ Rules:
   "forgetMemory": null | "phrase to remove",
   "webSearchUsed": boolean
 }
-2. Questions: Answer directly using schedule, to-dos, projects, transcripts, GitHub, or Slack. Resolve pronouns from history. When asked about sponsors, announcements, rules, people, or discussions, check the Slack topic, purpose, pinned messages, and recent messages above.
+2. Questions: Answer directly using schedule, to-dos, projects, transcripts, GitHub, Slack, or Hack Club Mail. Resolve pronouns from history. When asked about sponsors, announcements, rules, people, or discussions, check the Slack context. When asked about Hack Club mail, letters, stickers, swag, packages, or shipment tracking, check Hack Club Mail & Shipments above and provide specific tracking status, dates, tags, and public links. If not connected, explain how they can connect in the Integrations tab using their Hack Club Mail API Key.
 3. Actions:
 - Schedule event: action {type: "create_event", title, date, time, startMinutes, endMinutes}.
 - Add to-do: action {type: "create_todo", text}.

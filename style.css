@@ -3074,6 +3074,98 @@ h2 {
     text-overflow: ellipsis;
 }
 
+.mail-details-preview {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.mail-item-chip {
+    background-color: #080808;
+    border: 1px solid #1a1a1a;
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-decoration: none;
+    transition: border-color 0.15s ease;
+}
+
+.mail-item-chip:hover {
+    border-color: #333333;
+}
+
+.mail-item-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.mail-item-title {
+    color: #ffffff;
+    font-size: 0.86rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mail-item-status {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.mail-item-status.status-queued {
+    background-color: rgba(234, 179, 8, 0.15);
+    color: #eab308;
+}
+
+.mail-item-status.status-received {
+    background-color: rgba(74, 222, 128, 0.15);
+    color: #4ade80;
+}
+
+.mail-item-status.status-shipped,
+.mail-item-status.status-printed,
+.mail-item-status.status-in_transit {
+    background-color: rgba(96, 165, 250, 0.15);
+    color: #60a5fa;
+}
+
+.mail-item-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.mail-item-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.mail-tag-badge {
+    font-size: 0.68rem;
+    color: #a1a1aa;
+    background-color: #18181b;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #27272a;
+}
+
+.mail-item-date {
+    font-size: 0.7rem;
+    color: #71717a;
+    white-space: nowrap;
+}
+
 .integration-input-group {
     display: flex;
     gap: 8px;

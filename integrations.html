@@ -131,6 +131,29 @@
                             <div id="slack-channel-details" class="slack-channel-card hidden"></div>
                         </div>
                     </div>
+                    <div class="integration-card" id="mail-card">
+                        <div class="integration-header">
+                            <div class="integration-info">
+                                <h2>Hack Club Mail</h2>
+                                <p class="integration-desc">Connect Hack Club Mail (Theseus) to track physical mail, letters, stickers, and warehouse packages.</p>
+                            </div>
+                            <span id="mail-status-badge" class="status-badge disconnected">Disconnected</span>
+                        </div>
+                        <div class="integration-body">
+                            <form id="mail-token-form" class="integration-form">
+                                <div class="integration-field-block">
+                                    <label for="mail-token-input" class="conference-label">Hack Club Mail API Key</label>
+                                    <input type="password" id="mail-token-input" class="conference-input" required autocomplete="off" aria-label="Hack Club Mail API Key" value="th_apk_live_3cN2XKOQW1PVXnF8r0FVyFaRUGn4dK10w4rq">
+                                </div>
+                                <div class="integration-actions" style="margin-top: 8px;">
+                                    <button type="submit" id="mail-token-submit-btn" class="primary-btn">Connect &amp; Fetch Mail</button>
+                                    <button type="button" id="mail-token-disconnect-btn" class="secondary-btn hidden">Disconnect</button>
+                                </div>
+                            </form>
+                            <p id="mail-feedback" class="feedback-msg"></p>
+                            <div id="mail-details-preview" class="mail-details-preview hidden"></div>
+                        </div>
+                    </div>
                 </div>
             </main>
         </div>

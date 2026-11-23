@@ -116,6 +116,14 @@ const slackStatusBadge = document.getElementById("slack-status-badge");
 const slackFeedback = document.getElementById("slack-feedback");
 const slackChannelDetails = document.getElementById("slack-channel-details");
 
+const mailTokenForm = document.getElementById("mail-token-form");
+const mailTokenInput = document.getElementById("mail-token-input");
+const mailTokenSubmitBtn = document.getElementById("mail-token-submit-btn");
+const mailTokenDisconnectBtn = document.getElementById("mail-token-disconnect-btn");
+const mailStatusBadge = document.getElementById("mail-status-badge");
+const mailFeedback = document.getElementById("mail-feedback");
+const mailPreview = document.getElementById("mail-details-preview");
+
 function getStoredGitHubData() {
     try {
         const raw = localStorage.getItem("easy_there_github_data");
@@ -128,6 +136,17 @@ function getStoredGitHubData() {
 function getStoredSlackData() {
     try {
         const raw = localStorage.getItem("easy_there_slack_data");
+        if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return null;
+}
+
+function getStoredMailData() {
+    if (localStorage.getItem("easy_there_mail_disconnected") === "true") {
+        return null;
+    }
+    try {
+        const raw = localStorage.getItem("easy_there_mail_data");
         if (raw) return JSON.parse(raw);
     } catch (e) {}
     return null;
@@ -248,7 +267,8 @@ async function connectGitHub(username) {
         if (window.EasyThereFirebase && window.EasyThereFirebase.syncIntegrationsToCloud) {
             window.EasyThereFirebase.syncIntegrationsToCloud({
                 github: ghData,
-                slackData: getStoredSlackData()
+                slackData: getStoredSlackData(),
+                mailData: getStoredMailData()
             });
         }
         updateGitHubUI();
@@ -265,7 +285,8 @@ function disconnectGitHub() {
     if (window.EasyThereFirebase && window.EasyThereFirebase.syncIntegrationsToCloud) {
         window.EasyThereFirebase.syncIntegrationsToCloud({
             github: null,
-            slackData: getStoredSlackData()
+            slackData: getStoredSlackData(),
+            mailData: getStoredMailData()
         });
     }
     updateGitHubUI();
@@ -332,7 +353,8 @@ async function connectSlackBot(token, channelId) {
         if (window.EasyThereFirebase && window.EasyThereFirebase.syncIntegrationsToCloud) {
             window.EasyThereFirebase.syncIntegrationsToCloud({
                 github: getStoredGitHubData(),
-                slackData: slackData
+                slackData: slackData,
+                mailData: getStoredMailData()
             });
         }
 
@@ -351,10 +373,136 @@ function disconnectSlack() {
     if (window.EasyThereFirebase && window.EasyThereFirebase.syncIntegrationsToCloud) {
         window.EasyThereFirebase.syncIntegrationsToCloud({
             github: getStoredGitHubData(),
-            slackData: null
+            slackData: null,
+            mailData: getStoredMailData()
         });
     }
     updateSlackUI();
+}
+
+function updateMailUI() {
+    if (!mailStatusBadge) return;
+    const data = getStoredMailData();
+    if (data && data.token) {
+        const items = [...(Array.isArray(data.mail) ? data.mail : []), ...(Array.isArray(data.packages) ? data.packages : [])];
+        mailStatusBadge.textContent = items.length > 0 ? `${items.length} items` : "Connected";
+        mailStatusBadge.className = "status-badge connected";
+        if (mailTokenInput) mailTokenInput.value = data.token;
+        if (mailTokenDisconnectBtn) mailTokenDisconnectBtn.classList.remove("hidden");
+        if (mailTokenSubmitBtn) mailTokenSubmitBtn.textContent = "Refresh Mail";
+
+        if (mailFeedback) {
+            mailFeedback.textContent = `Connected to Hack Club Mail (${data.userId || 'User'}). Loaded ${items.length} shipments and letters.`;
+            mailFeedback.style.color = "#4ade80";
+        }
+
+        if (mailPreview && items.length > 0) {
+            mailPreview.classList.remove("hidden");
+            mailPreview.innerHTML = items.map(function(item) {
+                const title = item.title || item.id || "Letter";
+                const status = (item.status || "unknown").toLowerCase();
+                const tags = Array.isArray(item.tags) ? item.tags : [];
+                const tagsHtml = tags.map(function(t) {
+                    return `<span class="mail-tag-badge">${t}</span>`;
+                }).join("");
+                const date = (item.created_at || "").slice(0, 10);
+                const url = item.public_url || "#";
+                return `
+                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="mail-item-chip">
+                        <div class="mail-item-top">
+                            <span class="mail-item-title">${title}</span>
+                            <span class="mail-item-status status-${status}">${status}</span>
+                        </div>
+                        <div class="mail-item-bottom">
+                            <div class="mail-item-tags">${tagsHtml}</div>
+                            <span class="mail-item-date">${date}</span>
+                        </div>
+                    </a>
+                `;
+            }).join("");
+        }
+    } else {
+        mailStatusBadge.textContent = "Disconnected";
+        mailStatusBadge.className = "status-badge disconnected";
+        if (mailTokenInput) mailTokenInput.value = "th_apk_live_3cN2XKOQW1PVXnF8r0FVyFaRUGn4dK10w4rq";
+        if (mailTokenDisconnectBtn) mailTokenDisconnectBtn.classList.add("hidden");
+        if (mailTokenSubmitBtn) mailTokenSubmitBtn.textContent = "Connect & Fetch Mail";
+        if (mailFeedback) {
+            mailFeedback.textContent = "";
+        }
+        if (mailPreview) {
+            mailPreview.classList.add("hidden");
+            mailPreview.innerHTML = "";
+        }
+    }
+}
+
+async function connectMail(token) {
+    const cleanToken = (token || "").trim();
+    if (!cleanToken) {
+        if (mailFeedback) {
+            mailFeedback.textContent = "Please enter your Hack Club Mail API Key.";
+            mailFeedback.style.color = "#f87171";
+        }
+        return;
+    }
+
+    if (mailFeedback) {
+        mailFeedback.textContent = "Connecting to Hack Club Mail...";
+        mailFeedback.style.color = "#888888";
+    }
+
+    try {
+        const res = await fetch("/api/mail", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: cleanToken })
+        });
+
+        const data = await res.json();
+        if (!res.ok || data.error) {
+            throw new Error(data.error || "Failed to connect to Hack Club Mail");
+        }
+
+        const mailData = {
+            token: cleanToken,
+            userId: data.user ? data.user.id : null,
+            mail: data.mail || [],
+            packages: data.packages || [],
+            connectedAt: new Date().toISOString()
+        };
+
+        localStorage.removeItem("easy_there_mail_disconnected");
+        localStorage.setItem("easy_there_mail_data", JSON.stringify(mailData));
+
+        if (window.EasyThereFirebase && window.EasyThereFirebase.syncIntegrationsToCloud) {
+            window.EasyThereFirebase.syncIntegrationsToCloud({
+                github: getStoredGitHubData(),
+                slackData: getStoredSlackData(),
+                mailData: mailData
+            });
+        }
+
+        updateMailUI();
+    } catch (err) {
+        if (mailFeedback) {
+            mailFeedback.textContent = err.message || "Failed to connect to Hack Club Mail";
+            mailFeedback.style.color = "#f87171";
+        }
+    }
+}
+
+function disconnectMail() {
+    localStorage.setItem("easy_there_mail_disconnected", "true");
+    localStorage.removeItem("easy_there_mail_data");
+    if (window.EasyThereFirebase && window.EasyThereFirebase.syncIntegrationsToCloud) {
+        window.EasyThereFirebase.syncIntegrationsToCloud({
+            github: getStoredGitHubData(),
+            slackData: getStoredSlackData(),
+            mailData: null
+        });
+    }
+    updateMailUI();
 }
 
 if (ghForm) {
@@ -383,6 +531,19 @@ if (slackTokenDisconnectBtn) {
     slackTokenDisconnectBtn.addEventListener("click", disconnectSlack);
 }
 
+if (mailTokenForm) {
+    mailTokenForm.addEventListener("submit", function(e) {
+        e.preventDefault();
+        if (mailTokenInput) {
+            connectMail(mailTokenInput.value);
+        }
+    });
+}
+
+if (mailTokenDisconnectBtn) {
+    mailTokenDisconnectBtn.addEventListener("click", disconnectMail);
+}
+
 if (window.EasyThereFirebase) {
     window.EasyThereFirebase.onUserChanged(async function(user) {
         updateFirebaseUI(user);
@@ -395,8 +556,12 @@ if (window.EasyThereFirebase) {
                 if (cloudIntegrations.slackData) {
                     localStorage.setItem("easy_there_slack_data", JSON.stringify(cloudIntegrations.slackData));
                 }
+                if (cloudIntegrations.mailData) {
+                    localStorage.setItem("easy_there_mail_data", JSON.stringify(cloudIntegrations.mailData));
+                }
                 updateGitHubUI();
                 updateSlackUI();
+                updateMailUI();
             }
         }
     });
@@ -405,3 +570,8 @@ if (window.EasyThereFirebase) {
 updateUI();
 updateGitHubUI();
 updateSlackUI();
+updateMailUI();
+
+if (!getStoredMailData() && localStorage.getItem("easy_there_mail_disconnected") !== "true" && mailTokenInput && mailTokenInput.value) {
+    connectMail(mailTokenInput.value);
+}
